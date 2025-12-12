@@ -1,0 +1,197 @@
+╔══════════════════════════════════════════════════════════════════════╗
+║        评估脚本状态检查报告 - 2025-11-04                              ║
+╚══════════════════════════════════════════════════════════════════════╝
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📋 检查摘要
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✅ 脚本可执行性: 正常
+✅ 依赖文件: 完整
+✅ SwinIR 模块: 已配置
+✅ PyTorch 环境: 正常
+✅ CUDA 支持: 可用 (RTX 4090)
+✅ 脚本已更新: 支持新的 SwinIR 配置
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1️⃣  脚本可执行性
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+文件: /home/nju/InterFuser/sensor_data_processor_module/run_evaluation_with_processor.sh
+权限: -rwxrwxr-x (可执行)
+状态: ✅ 可以直接运行
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+2️⃣  依赖文件
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✅ data_processor.py                   (7.1 KB)
+✅ data_processor_config.py            (8.0 KB)
+✅ interfuser_agent_complete.py        (25 KB)
+✅ restore_original_agent.sh           (存在)
+✅ /home/nju/InterFuser/leaderboard/team_code (目标目录)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+3️⃣  SwinIR 环境配置
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✅ SwinIR 目录: /home/nju/InterFuser/process_mothod/SwinIR
+✅ 核心文件:
+   • swinir_wrapper.py
+   • main_test_swinir.py
+✅ 模型目录: model_zoo/ 
+✅ 已下载模型:
+   • 005_colorDN_DFWB_s128w8_SwinIR-M_noise15.pth (彩色去噪 noise=15)
+
+⚠️  其他模型需要下载:
+   ❌ noise=25 模型 (CONFIG_COLOR_DENOISE_25)
+   ❌ noise=50 模型 (CONFIG_COLOR_DENOISE_50)
+   ❌ 2x SR 模型 (CONFIG_SR_2X)
+   ❌ 4x SR 模型 (CONFIG_SR_4X)
+   ❌ JPEG 修复模型 (CONFIG_JPEG_REPAIR)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+4️⃣  Python 环境
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✅ Conda 环境: interfuser
+✅ PyTorch 版本: 1.13.1+cu117
+✅ CUDA 可用: True
+✅ GPU 设备: NVIDIA GeForce RTX 4090
+✅ SwinIRProcessor 导入: 成功
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+5️⃣  评估结果保存位置
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+结果目录结构:
+/home/nju/InterFuser/
+  ├── results/with_processor/           ← JSON 评估结果
+  │   └── {RESULT_BASE}_{TIMESTAMP}.json
+  │
+  └── data/eval_with_processor/         ← 详细评估数据
+      └── {RESULT_BASE}_{TIMESTAMP}/
+          ├── evaluation_metadata.json  ← 评估元数据
+          └── ...                       ← 其他评估数据
+
+示例路径:
+  • JSON 结果: results/with_processor/town05_denoise15_20251104_153022.json
+  • 评估数据: data/eval_with_processor/town05_denoise15_20251104_153022/
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+6️⃣  脚本更新内容
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✅ 配置类型已更新为 SwinIR 版本:
+   旧: mild, moderate, severe, failure, custom
+   新: no_processing, denoise15, denoise25, denoise50, sr2x, sr4x, jpeg_repair, custom
+
+✅ 默认配置: no_processing (不进行数据处理)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🚀 使用方法
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+基本用法:
+────────────────────────────────────────────────────────────
+./run_evaluation_with_processor.sh [评估类型] [配置类型]
+
+评估类型:
+  • town05      - Town05 Long Benchmark
+  • 42routes    - CARLA 42 Routes Benchmark
+  • custom      - 自定义路线
+
+配置类型:
+  • no_processing  - 无处理（基准测试）⭐ 默认
+  • denoise15      - 彩色去噪 noise=15 ✅ 模型已下载
+  • denoise25      - 彩色去噪 noise=25 ⚠️ 需要下载模型
+  • denoise50      - 彩色去噪 noise=50 ⚠️ 需要下载模型
+  • sr2x           - 2x 超分辨率 ⚠️ 需要下载模型
+  • sr4x           - 4x 超分辨率 ⚠️ 需要下载模型
+  • jpeg_repair    - JPEG 修复 ⚠️ 需要下载模型
+  • custom         - 自定义配置
+
+示例:
+────────────────────────────────────────────────────────────
+# 1. 基准测试（无处理）
+./run_evaluation_with_processor.sh town05 no_processing
+
+# 2. 使用彩色去噪（已下载模型）
+./run_evaluation_with_processor.sh town05 denoise15
+
+# 3. 使用不同 GPU
+GPU_ID=1 ./run_evaluation_with_processor.sh town05 denoise15
+
+# 4. 42 Routes 基准测试
+./run_evaluation_with_processor.sh 42routes no_processing
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚠️  注意事项
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. CARLA 服务器
+   ✅ 评估前必须先启动 CARLA 服务器
+   📝 命令: cd /home/nju/InterFuser/evaluation_scripts && ./start_carla_server.sh
+
+2. 下载模型
+   ⚠️  除了 denoise15 外，其他配置需要先下载模型
+   📝 命令: cd /home/nju/InterFuser/process_mothod/SwinIR && bash download-weights.sh
+
+3. 自动恢复
+   ✅ 脚本会自动备份和恢复原始 agent 文件
+   ✅ 评估结束后自动清理部署的文件
+
+4. 结果查看
+   📝 命令: bash /home/nju/InterFuser/evaluation_scripts/view_results.sh [结果文件路径]
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📝 下一步操作
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+选项 1: 运行基准测试（推荐）⭐
+────────────────────────────────────────────────────────────
+不进行数据处理，测试原始 agent 性能：
+
+cd /home/nju/InterFuser/sensor_data_processor_module
+./run_evaluation_with_processor.sh town05 no_processing
+
+
+选项 2: 使用 SwinIR 去噪（已下载模型）
+────────────────────────────────────────────────────────────
+使用彩色去噪 (noise=15):
+
+cd /home/nju/InterFuser/sensor_data_processor_module
+./run_evaluation_with_processor.sh town05 denoise15
+
+
+选项 3: 下载更多模型
+────────────────────────────────────────────────────────────
+cd /home/nju/InterFuser/process_mothod/SwinIR
+bash download-weights.sh
+
+# 然后运行其他配置:
+cd /home/nju/InterFuser/sensor_data_processor_module
+./run_evaluation_with_processor.sh town05 sr2x
+
+
+选项 4: 快速测试（3 条短路线）
+────────────────────────────────────────────────────────────
+cd /home/nju/InterFuser/sensor_data_processor_module
+./quick_test.sh
+
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✅ 总结
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✅ 脚本可以正常执行
+✅ 所有依赖文件齐全
+✅ SwinIR 环境配置完整
+✅ 已有 1 个模型可用 (denoise15)
+✅ 结果会保存在 results/with_processor/ 和 data/eval_with_processor/
+✅ 脚本已更新为 SwinIR 配置
+
+⚠️  建议先运行基准测试 (no_processing) 或使用 denoise15 配置
+⚠️  其他配置需要先下载对应的模型文件
+
+═══════════════════════════════════════════════════════════════════════

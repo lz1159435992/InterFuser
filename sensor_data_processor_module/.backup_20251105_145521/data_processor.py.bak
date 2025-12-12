@@ -1,0 +1,219 @@
+"""
+传感器数据处理器 - SwinIR 版本
+
+此模块使用 SwinIR 进行图像处理
+- 输入：RGB 图像
+- 输出：处理后的 RGB 图像
+- 默认参数与 main_test_swinir.py 一致
+
+使用方法：
+    from data_processor import SensorDataProcessor
+    from data_processor_config import ACTIVE_CONFIG
+    
+    processor = SensorDataProcessor(ACTIVE_CONFIG)
+    processed_rgb = processor.process_rgb(rgb_image)
+"""
+
+import sys
+import os
+import numpy as np
+from pathlib import Path
+import json
+
+# 添加 SwinIR 路径
+SWINIR_PATH = '/home/nju/InterFuser/process_mothod/SwinIR'
+if SWINIR_PATH not in sys.path:
+    sys.path.insert(0, SWINIR_PATH)
+
+
+class SensorDataProcessor:
+    """传感器数据处理器 - 使用 SwinIR"""
+    
+    def __init__(self, config):
+        """
+        初始化数据处理器
+        
+        Args:
+            config: 配置字典，参见 data_processor_config.py
+        """
+        self.config = config
+        self.enabled = config.get('enabled', True)
+        self.frame_count = 0
+        self.stats = {
+            'total_frames': 0,
+            'rgb_processed': 0,
+        }
+        
+        # 初始化 SwinIR 处理器
+        self.swinir_processor = None
+        if self.enabled:
+            swinir_config = config.get('swinir', {})
+            if swinir_config.get('enabled', False):
+                self._init_swinir(swinir_config)
+        
+        # 打印初始化信息
+        if self.enabled and self.swinir_processor:
+            print("\n" + "=" * 70)
+            print("🖼️  SwinIR 数据处理器已初始化")
+            print("=" * 70)
+            print(f"  任务: {swinir_config.get('task', 'color_dn')}")
+            print(f"  模型: {swinir_config.get('model_path', 'N/A')}")
+            if swinir_config.get('task') in ['denoise', 'gray_dn', 'color_dn']:
+                print(f"  噪声等级: {swinir_config.get('noise', 15)}")
+            if swinir_config.get('task') in ['jpeg', 'jpeg_car', 'color_jpeg_car']:
+                print(f"  JPEG 质量: {swinir_config.get('jpeg', 40)}")
+            print("=" * 70 + "\n")
+    
+    def _init_swinir(self, swinir_config):
+        """初始化 SwinIR 处理器"""
+        try:
+            from swinir_wrapper import SwinIRProcessor
+            
+            model_path = swinir_config.get('model_path')
+            if not model_path or not os.path.exists(model_path):
+                print(f"⚠️  SwinIR 模型文件不存在: {model_path}")
+                print("  跳过 SwinIR 初始化")
+                return
+            
+            self.swinir_processor = SwinIRProcessor(
+                model_path=model_path,
+                task=swinir_config.get('task', 'color_dn'),
+                upscale=swinir_config.get('upscale', 1),
+                device=swinir_config.get('device', 'cuda'),
+                half_precision=swinir_config.get('half_precision', False),
+                noise=swinir_config.get('noise', 15),
+                jpeg=swinir_config.get('jpeg', 40),
+                training_patch_size=swinir_config.get('training_patch_size', 128),
+                tile=swinir_config.get('tile', None),
+                tile_overlap=swinir_config.get('tile_overlap', 32)
+            )
+            
+        except ImportError as e:
+            print(f"⚠️  无法导入 SwinIR: {e}")
+            print(f"  请确保 SwinIR 在路径: {SWINIR_PATH}")
+            self.swinir_processor = None
+        except Exception as e:
+            print(f"⚠️  SwinIR 初始化失败: {e}")
+            self.swinir_processor = None
+    
+    def process_rgb(self, rgb_image, sensor_id='rgb'):
+        """
+        处理 RGB 图像
+        
+        Args:
+            rgb_image: numpy array, shape (H, W, 3), RGB 格式, 0-255
+            sensor_id: 传感器 ID（未使用，保持接口兼容）
+        
+        Returns:
+            处理后的 RGB 图像，shape (H, W, 3), RGB 格式, 0-255
+        """
+        if not self.enabled or self.swinir_processor is None:
+            return rgb_image
+        
+        # 使用 SwinIR 处理
+        processed = self.swinir_processor.process(rgb_image)
+        
+        # 更新统计
+        self.stats['rgb_processed'] += 1
+        
+        return processed
+    
+    def next_frame(self):
+        """更新帧计数"""
+        self.frame_count += 1
+        self.stats['total_frames'] += 1
+    
+    def get_config_summary(self):
+        """获取配置摘要"""
+        summary = {
+            'enabled': self.enabled,
+        }
+        
+        if self.swinir_processor:
+            swinir_stats = self.swinir_processor.get_stats()
+            summary['swinir'] = swinir_stats
+        
+        return summary
+    
+    def print_stats(self):
+        """打印统计信息"""
+        print("\n" + "=" * 70)
+        print("📊 数据处理器统计信息")
+        print("=" * 70)
+        print(f"  总帧数: {self.stats['total_frames']}")
+        print(f"  RGB 处理: {self.stats['rgb_processed']}")
+        
+        if self.swinir_processor:
+            swinir_stats = self.swinir_processor.get_stats()
+            print(f"\nSwinIR 统计:")
+            print(f"  任务: {swinir_stats['task']}")
+            print(f"  设备: {swinir_stats['device']}")
+            print(f"  处理帧数: {swinir_stats['process_count']}")
+        
+        print("=" * 70 + "\n")
+    
+    def save_stats(self, filepath):
+        """保存统计信息到 JSON 文件"""
+        stats_data = {
+            'stats': self.stats,
+            'config_summary': self.get_config_summary()
+        }
+        
+        with open(filepath, 'w') as f:
+            json.dump(stats_data, f, indent=2)
+        
+        print(f"✅ 统计信息已保存到: {filepath}")
+
+
+# 为了向后兼容，保留一些空的方法
+    def process_lidar(self, lidar_data):
+        """保持接口兼容，直接返回原始数据"""
+        return lidar_data
+    
+    def process_gps(self, gps_data):
+        """保持接口兼容，直接返回原始数据"""
+        return gps_data
+    
+    def process_speed(self, speed):
+        """保持接口兼容，直接返回原始数据"""
+        return speed
+    
+    def process_compass(self, compass):
+        """保持接口兼容，直接返回原始数据"""
+        return compass
+
+
+if __name__ == "__main__":
+    # 简单测试
+    print("=" * 70)
+    print("🧪 测试 SensorDataProcessor")
+    print("=" * 70)
+    
+    # 创建测试配置
+    test_config = {
+        'enabled': True,
+        'swinir': {
+            'enabled': False,  # 默认关闭，因为需要模型文件
+            'model_path': '/home/nju/InterFuser/process_mothod/SwinIR/model_zoo/swinir/005_colorDN_DFWB_s128w8_SwinIR-M_noise15.pth',
+            'task': 'color_dn',
+            'noise': 15,
+        }
+    }
+    
+    processor = SensorDataProcessor(test_config)
+    
+    # 创建测试图像
+    test_image = np.random.randint(0, 256, (100, 100, 3), dtype=np.uint8)
+    print(f"\n输入图像形状: {test_image.shape}")
+    
+    # 处理
+    output = processor.process_rgb(test_image)
+    print(f"输出图像形状: {output.shape}")
+    
+    # 打印统计
+    processor.next_frame()
+    processor.print_stats()
+    
+    print("\n" + "=" * 70)
+    print("✅ 测试完成")
+    print("=" * 70)

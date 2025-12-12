@@ -1,0 +1,228 @@
+"""
+数据处理器配置文件 - SwinIR 版本
+
+此配置文件定义了 SwinIR 图像处理的参数
+默认参数与 main_test_swinir.py 一致
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🎯 快速控制指南：
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+方法 1: 完全关闭所有数据处理（推荐）⭐
+  修改下面的 ENABLE_ALL_PROCESSING = False
+
+方法 2: 使用预设配置
+  修改最后一行: ACTIVE_CONFIG = CONFIG_NO_PROCESSING  # 不处理
+                ACTIVE_CONFIG = CONFIG_COLOR_DENOISE   # 彩色去噪
+                ACTIVE_CONFIG = CONFIG_SR_2X           # 2x 超分辨率
+                ACTIVE_CONFIG = CONFIG_JPEG_REPAIR     # JPEG 修复
+
+方法 3: 自定义处理
+  修改下面 DATA_PROCESSOR_CONFIG 中的参数
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+"""
+
+# ============================================================
+# 🎛️ 总开关 - 最简单的控制方法
+# ============================================================
+
+ENABLE_ALL_PROCESSING = True  # ← 改为 False 即可关闭所有数据处理！
+
+# ============================================================
+# 📝 基础配置 - SwinIR 图像处理
+# ============================================================
+
+DATA_PROCESSOR_CONFIG = {
+    # 全局开关
+    'enabled': ENABLE_ALL_PROCESSING,
+    
+    # ========== SwinIR 配置 ==========
+    'swinir': {
+        'enabled': False,  # 是否启用 SwinIR（需要先下载模型）
+        
+        # 模型路径（必需）
+        'model_path': '/home/nju/InterFuser/process_mothod/SwinIR/model_zoo/swinir/005_colorDN_DFWB_s128w8_SwinIR-M_noise15.pth',
+        
+        # 任务类型（与 main_test_swinir.py 一致）
+        # 可选: 'classical_sr', 'lightweight_sr', 'real_sr', 
+        #       'gray_dn', 'color_dn', 'jpeg_car', 'color_jpeg_car'
+        'task': 'color_dn',  # 默认: 彩色图像去噪
+        
+        # 放大倍数（用于超分辨率任务）
+        'upscale': 1,  # 默认: 1 (去噪任务), SR 任务使用 2, 4, 8
+        
+        # 噪声等级（用于去噪任务）
+        'noise': 15,  # 默认: 15, 可选: 15, 25, 50
+        
+        # JPEG 质量（用于 JPEG 修复任务）
+        'jpeg': 40,  # 默认: 40, 可选: 10, 20, 30, 40
+        
+        # 训练时的 patch 大小
+        'training_patch_size': 128,  # 默认: 128
+        
+        # 瓦片处理（用于大图像）
+        'tile': None,  # 默认: None (整图处理), 可设为 512, 1024 等
+        'tile_overlap': 32,  # 默认: 32
+        
+        # 设备
+        'device': 'cuda',  # 'cuda' 或 'cpu'
+        
+        # 半精度（FP16）
+        'half_precision': False,  # True 可加速，但可能降低精度
+    },
+}
+
+
+# ============================================================
+# 🚫 无处理配置 - 直接传递原始数据
+# ============================================================
+
+CONFIG_NO_PROCESSING = {
+    'enabled': False,
+    'swinir': {
+        'enabled': False,
+    },
+}
+
+
+# ============================================================
+# 🎨 预设配置 1: 彩色图像去噪（噪声等级 15）
+# ============================================================
+
+CONFIG_COLOR_DENOISE = {
+    'enabled': True,
+    'swinir': {
+        'enabled': True,
+        'model_path': '/home/nju/InterFuser/process_mothod/SwinIR/model_zoo/swinir/005_colorDN_DFWB_s128w8_SwinIR-M_noise15.pth',
+        'task': 'color_dn',
+        'upscale': 1,
+        'noise': 15,
+        'training_patch_size': 128,
+        'device': 'cuda',
+        'half_precision': False,
+    },
+}
+
+
+# ============================================================
+# 🎨 预设配置 2: 彩色图像去噪（噪声等级 25）
+# ============================================================
+
+CONFIG_COLOR_DENOISE_25 = {
+    'enabled': True,
+    'swinir': {
+        'enabled': True,
+        'model_path': '/home/nju/InterFuser/process_mothod/SwinIR/model_zoo/swinir/005_colorDN_DFWB_s128w8_SwinIR-M_noise25.pth',
+        'task': 'color_dn',
+        'upscale': 1,
+        'noise': 25,
+        'training_patch_size': 128,
+        'device': 'cuda',
+        'half_precision': False,
+    },
+}
+
+
+# ============================================================
+# 🎨 预设配置 3: 彩色图像去噪（噪声等级 50）
+# ============================================================
+
+CONFIG_COLOR_DENOISE_50 = {
+    'enabled': True,
+    'swinir': {
+        'enabled': True,
+        'model_path': '/home/nju/InterFuser/process_mothod/SwinIR/model_zoo/swinir/005_colorDN_DFWB_s128w8_SwinIR-M_noise50.pth',
+        'task': 'color_dn',
+        'upscale': 1,
+        'noise': 50,
+        'training_patch_size': 128,
+        'device': 'cuda',
+        'half_precision': False,
+    },
+}
+
+
+# ============================================================
+# 🔍 预设配置 4: 2x 超分辨率
+# ============================================================
+
+CONFIG_SR_2X = {
+    'enabled': True,
+    'swinir': {
+        'enabled': True,
+        'model_path': '/home/nju/InterFuser/process_mothod/SwinIR/model_zoo/swinir/001_classicalSR_DF2K_s64w8_SwinIR-M_x2.pth',
+        'task': 'classical_sr',
+        'upscale': 2,
+        'training_patch_size': 128,
+        'device': 'cuda',
+        'half_precision': False,
+    },
+}
+
+
+# ============================================================
+# 🔍 预设配置 5: 4x 超分辨率
+# ============================================================
+
+CONFIG_SR_4X = {
+    'enabled': True,
+    'swinir': {
+        'enabled': True,
+        'model_path': '/home/nju/InterFuser/process_mothod/SwinIR/model_zoo/swinir/001_classicalSR_DF2K_s64w8_SwinIR-M_x4.pth',
+        'task': 'classical_sr',
+        'upscale': 4,
+        'training_patch_size': 128,
+        'device': 'cuda',
+        'half_precision': False,
+    },
+}
+
+
+# ============================================================
+# 📷 预设配置 6: JPEG 压缩伪影修复（质量 40）
+# ============================================================
+
+CONFIG_JPEG_REPAIR = {
+    'enabled': True,
+    'swinir': {
+        'enabled': True,
+        'model_path': '/home/nju/InterFuser/process_mothod/SwinIR/model_zoo/swinir/006_CAR_DFWB_s126w7_SwinIR-M_jpeg40.pth',
+        'task': 'jpeg_car',
+        'upscale': 1,
+        'jpeg': 40,
+        'training_patch_size': 128,
+        'device': 'cuda',
+        'half_precision': False,
+    },
+}
+
+
+# ============================================================
+# 🎯 激活配置选择
+# ============================================================
+# 
+# 可选配置：
+#   - CONFIG_NO_PROCESSING      : 无处理（原始数据）⭐ 推荐测试用
+#   - CONFIG_COLOR_DENOISE      : 彩色去噪 (noise=15)
+#   - CONFIG_COLOR_DENOISE_25   : 彩色去噪 (noise=25)
+#   - CONFIG_COLOR_DENOISE_50   : 彩色去噪 (noise=50)
+#   - CONFIG_SR_2X              : 2x 超分辨率
+#   - CONFIG_SR_4X              : 4x 超分辨率
+#   - CONFIG_JPEG_REPAIR        : JPEG 修复
+#   - DATA_PROCESSOR_CONFIG     : 自定义配置
+#
+# 使用方法：取消注释下面某一行，或修改最后的 ACTIVE_CONFIG
+#
+# ============================================================
+
+# ACTIVE_CONFIG = CONFIG_NO_PROCESSING     # 无处理
+# ACTIVE_CONFIG = CONFIG_COLOR_DENOISE     # 彩色去噪 (noise=15)
+# ACTIVE_CONFIG = CONFIG_COLOR_DENOISE_25  # 彩色去噪 (noise=25)
+# ACTIVE_CONFIG = CONFIG_COLOR_DENOISE_50  # 彩色去噪 (noise=50)
+# ACTIVE_CONFIG = CONFIG_SR_2X             # 2x 超分辨率
+# ACTIVE_CONFIG = CONFIG_SR_4X             # 4x 超分辨率
+# ACTIVE_CONFIG = CONFIG_JPEG_REPAIR       # JPEG 修复
+
+# 默认使用无处理配置（需要先下载模型才能启用 SwinIR）
+ACTIVE_CONFIG = CONFIG_COLOR_DENOISE

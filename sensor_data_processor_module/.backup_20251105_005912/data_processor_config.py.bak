@@ -1,0 +1,369 @@
+"""
+数据处理器配置文件
+
+此配置文件定义了传感器数据的各种处理选项，包括：
+- RGB 图像处理（噪声、亮度、模糊、对比度等）
+- LiDAR 点云处理（噪声、丢失、距离限制等）
+- GPS 处理（漂移误差）
+- 速度传感器处理（测量误差）
+- 罗盘处理（方向误差）
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🎯 快速控制指南：
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+方法 1: 完全关闭所有数据处理（推荐）⭐
+  修改下面的 ENABLE_ALL_PROCESSING = False
+
+方法 2: 使用预设配置
+  修改最后一行: ACTIVE_CONFIG = CONFIG_NO_PROCESSING  # 不处理
+                ACTIVE_CONFIG = CONFIG_MILD_NOISE      # 轻度噪声
+                ACTIVE_CONFIG = CONFIG_MODERATE_NOISE  # 中度噪声
+                ACTIVE_CONFIG = CONFIG_SEVERE_NOISE    # 重度噪声
+
+方法 3: 自定义处理
+  修改下面 DATA_PROCESSOR_CONFIG 中各个效果的 'enabled' 参数
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+"""
+
+# ============================================================
+# 🎛️ 总开关 - 最简单的控制方法
+# ============================================================
+
+ENABLE_ALL_PROCESSING = True  # ← 改为 False 即可关闭所有数据处理！
+
+# ============================================================
+# 📝 基础配置
+# ============================================================
+
+DATA_PROCESSOR_CONFIG = {
+    # 全局开关（会被 ENABLE_ALL_PROCESSING 覆盖）
+    'enabled': ENABLE_ALL_PROCESSING,
+    
+    # ========== RGB 图像处理 ==========
+    'rgb': {
+        # 高斯噪声
+        'add_gaussian_noise': {
+            'enabled': False,
+            'mean': 0,
+            'std': 10,  # 标准差，0-255
+        },
+        
+        # 亮度调整
+        'brightness': {
+            'enabled': False,
+            'factor': 1.2,  # 1.0=不变, >1=变亮, <1=变暗
+        },
+        
+        # 高斯模糊
+        'blur': {
+            'enabled': False,
+            'kernel_size': 5,  # 必须是奇数，越大越模糊
+        },
+        
+        # 对比度调整
+        'contrast': {
+            'enabled': False,
+            'factor': 1.2,  # 1.0=不变, >1=增强, <1=减弱
+        },
+        
+        # 饱和度调整
+        'saturation': {
+            'enabled': False,
+            'factor': 1.2,  # 1.0=不变, >1=增强, <1=减弱（趋向灰度）
+        },
+        
+        # 随机像素丢失
+        'pixel_dropout': {
+            'enabled': False,
+            'rate': 0.01,  # 0.01 = 1% 像素丢失
+        },
+        
+        # 色彩偏移（模拟相机白平衡问题）
+        'color_shift': {
+            'enabled': False,
+            'r_shift': 0,  # -50 到 50
+            'g_shift': 0,
+            'b_shift': 0,
+        },
+    },
+    
+    # ========== LiDAR 点云处理 ==========
+    'lidar': {
+        # 位置噪声
+        'noise': {
+            'enabled': False,
+            'std': 0.02,  # 米，标准差
+        },
+        
+        # 点云丢失
+        'dropout': {
+            'enabled': False,
+            'rate': 0.1,  # 0.1 = 10% 点云丢失
+        },
+        
+        # 距离限制（模拟 LiDAR 有效范围）
+        'range_limit': {
+            'enabled': False,
+            'max_range': 50.0,  # 米
+            'min_range': 0.5,   # 米
+        },
+        
+        # 强度噪声（如果 LiDAR 数据包含强度信息）
+        'intensity_noise': {
+            'enabled': False,
+            'std': 0.1,
+        },
+    },
+    
+    # ========== GPS 处理 ==========
+    'gps': {
+        # GPS 漂移误差
+        'drift': {
+            'enabled': False,
+            'std': 0.5,  # 米，标准差
+        },
+        
+        # 随机跳变（模拟 GPS 信号丢失）
+        'random_jump': {
+            'enabled': False,
+            'probability': 0.01,  # 每帧有 1% 概率发生跳变
+            'max_distance': 5.0,   # 最大跳变距离，米
+        },
+    },
+    
+    # ========== 速度传感器处理 ==========
+    'speed': {
+        # 测量误差
+        'error': {
+            'enabled': False,
+            'std': 0.1,  # m/s，标准差
+        },
+        
+        # 系统偏差（恒定偏移）
+        'bias': {
+            'enabled': False,
+            'value': 0.0,  # m/s
+        },
+    },
+    
+    # ========== 罗盘处理 ==========
+    'compass': {
+        # 方向误差
+        'error': {
+            'enabled': False,
+            'std': 0.05,  # 弧度，标准差
+        },
+        
+        # 磁偏角（恒定偏移）
+        'declination': {
+            'enabled': False,
+            'value': 0.0,  # 弧度
+        },
+    },
+    
+    # ========== 高级功能 ==========
+    'advanced': {
+        # 记录原始数据和处理后数据
+        'log_data': False,
+        'log_path': './data_logs',
+        
+        # 保存对比图像
+        'save_comparison': False,
+        'comparison_path': './data_comparison',
+        
+        # 统计信息
+        'print_stats': False,  # 打印处理统计信息
+        'stats_interval': 100,  # 每 N 帧打印一次
+    },
+}
+
+
+# ========== 预设配置 ==========
+
+# 轻度噪声（模拟良好天气条件）
+CONFIG_MILD_NOISE = {
+    'enabled': True,
+    'rgb': {
+        'add_gaussian_noise': {
+            'enabled': True,
+            'mean': 0,
+            'std': 5,
+        },
+    },
+    'lidar': {
+        'noise': {
+            'enabled': True,
+            'std': 0.01,
+        },
+    },
+    'gps': {
+        'drift': {
+            'enabled': True,
+            'std': 0.3,
+        },
+    },
+    'advanced': {'log_data': False, 'save_comparison': False, 'print_stats': False},
+}
+
+# 中度噪声（模拟一般条件）
+CONFIG_MODERATE_NOISE = {
+    'enabled': True,
+    'rgb': {
+        'add_gaussian_noise': {
+            'enabled': True,
+            'mean': 0,
+            'std': 15,
+        },
+        'blur': {
+            'enabled': True,
+            'kernel_size': 3,
+        },
+    },
+    'lidar': {
+        'noise': {
+            'enabled': True,
+            'std': 0.03,
+        },
+        'dropout': {
+            'enabled': True,
+            'rate': 0.05,
+        },
+    },
+    'gps': {
+        'drift': {
+            'enabled': True,
+            'std': 1.0,
+        },
+    },
+    'speed': {
+        'error': {
+            'enabled': True,
+            'std': 0.2,
+        },
+    },
+    'advanced': {'log_data': False, 'save_comparison': False, 'print_stats': False},
+}
+
+# 严重噪声（模拟恶劣条件）
+CONFIG_SEVERE_NOISE = {
+    'enabled': True,
+    'rgb': {
+        'add_gaussian_noise': {
+            'enabled': True,
+            'mean': 0,
+            'std': 25,
+        },
+        'brightness': {
+            'enabled': True,
+            'factor': 0.7,
+        },
+        'blur': {
+            'enabled': True,
+            'kernel_size': 5,
+        },
+    },
+    'lidar': {
+        'noise': {
+            'enabled': True,
+            'std': 0.08,
+        },
+        'dropout': {
+            'enabled': True,
+            'rate': 0.2,
+        },
+    },
+    'gps': {
+        'drift': {
+            'enabled': True,
+            'std': 2.0,
+        },
+    },
+    'speed': {
+        'error': {
+            'enabled': True,
+            'std': 0.5,
+        },
+    },
+    'compass': {
+        'error': {
+            'enabled': True,
+            'std': 0.1,
+        },
+    },
+    'advanced': {'log_data': False, 'save_comparison': False, 'print_stats': False},
+}
+
+# 传感器故障模拟
+CONFIG_SENSOR_FAILURE = {
+    'enabled': True,
+    'rgb': {
+        'pixel_dropout': {
+            'enabled': True,
+            'rate': 0.05,  # 5% 像素丢失
+        },
+    },
+    'lidar': {
+        'dropout': {
+            'enabled': True,
+            'rate': 0.3,  # 30% 点云丢失
+        },
+        'range_limit': {
+            'enabled': True,
+            'max_range': 30.0,  # 限制到 30 米
+            'min_range': 1.0,
+        },
+    },
+    'gps': {
+        'random_jump': {
+            'enabled': True,
+            'probability': 0.05,
+            'max_distance': 10.0,
+        },
+    },
+    'advanced': {'log_data': False, 'save_comparison': False, 'print_stats': False},
+}
+
+
+# ========== 当前使用的配置 ==========
+# ============================================================
+# 🚫 无处理配置 - 直接传递原始数据
+# ============================================================
+
+CONFIG_NO_PROCESSING = {
+    'enabled': False,  # 全局禁用
+    'rgb': {},
+    'lidar': {},
+    'gps': {},
+    'speed': {},
+    'compass': {},
+    'advanced': {'log_data': False, 'save_comparison': False, 'print_stats': False},
+}
+
+# ============================================================
+# 🎯 激活配置选择
+# ============================================================
+# 
+# 可选配置：
+#   - CONFIG_NO_PROCESSING   : 无处理（原始数据）⭐ 推荐测试用
+#   - DATA_PROCESSOR_CONFIG  : 基础配置（默认全部关闭，可自定义）
+#   - CONFIG_MILD_NOISE      : 轻度噪声
+#   - CONFIG_MODERATE_NOISE  : 中度噪声
+#   - CONFIG_SEVERE_NOISE    : 重度噪声
+#   - CONFIG_SENSOR_FAILURE  : 传感器故障模拟
+#
+# 使用方法：取消注释下面某一行，或修改最后的 ACTIVE_CONFIG
+#
+# ============================================================
+
+# ACTIVE_CONFIG = CONFIG_NO_PROCESSING   # 无处理
+# ACTIVE_CONFIG = DATA_PROCESSOR_CONFIG  # 自定义配置
+# ACTIVE_CONFIG = CONFIG_MILD_NOISE      # 轻度噪声
+# ACTIVE_CONFIG = CONFIG_MODERATE_NOISE  # 中度噪声
+# ACTIVE_CONFIG = CONFIG_SEVERE_NOISE    # 重度噪声
+# ACTIVE_CONFIG = CONFIG_SENSOR_FAILURE  # 传感器故障
+
+# 默认使用自定义配置（所有处理默认关闭）
+ACTIVE_CONFIG = DATA_PROCESSOR_CONFIG
+

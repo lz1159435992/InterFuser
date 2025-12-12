@@ -1,0 +1,24 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<routes>
+  <!-- 测试路线 1: Town05 短路线 -->
+  <route id="0" town="Town05">
+    <waypoint x="-107.15" y="-135.17" z="0.055" pitch="0.0" roll="0.0" yaw="0.44"/>
+    <waypoint x="-55.82" y="-107.07" z="0.055" pitch="0.0" roll="0.0" yaw="78.02"/>
+    <waypoint x="-54.58" y="-18.78" z="0.055" pitch="0.0" roll="0.0" yaw="89.66"/>
+  </route>
+  
+  <!-- 测试路线 2: Town05 短路线 -->
+  <route id="1" town="Town05">
+    <waypoint x="-82.96" y="-4.25" z="0.0" pitch="0.0" roll="0.0" yaw="179.86"/>
+    <waypoint x="-121.49" y="-28.45" z="0.0" pitch="0.0" roll="0.0" yaw="270.39"/>
+    <waypoint x="-121.21" y="-69.78" z="0.0" pitch="0.0" roll="0.0" yaw="270.39"/>
+  </route>
+  
+  <!-- 测试路线 3: Town05 短路线 -->
+  <route id="2" town="Town05">
+    <waypoint x="-120.95" y="-106.91" z="0.0" pitch="0.0" roll="0.0" yaw="270.39"/>
+    <waypoint x="-120.85" y="-121.64" z="0.0" pitch="0.0" roll="0.0" yaw="270.39"/>
+    <waypoint x="-148.22" y="-142.49" z="0.055" pitch="0.0" roll="0.0" yaw="180.44"/>
+  </route>
+</routes>
+

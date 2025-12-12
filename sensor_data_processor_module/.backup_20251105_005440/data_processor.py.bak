@@ -1,0 +1,456 @@
+"""
+传感器数据处理器
+
+此模块提供了对传感器数据进行各种处理的功能，包括：
+- RGB 图像处理（噪声、亮度、模糊等）
+- LiDAR 点云处理（噪声、丢失等）
+- GPS、速度、罗盘等传感器的噪声模拟
+
+使用方法：
+    from data_processor import SensorDataProcessor
+    from data_processor_config import ACTIVE_CONFIG
+    
+    processor = SensorDataProcessor(ACTIVE_CONFIG)
+    processed_rgb = processor.process_rgb(rgb_image)
+    processed_lidar = processor.process_lidar(lidar_points)
+"""
+
+import numpy as np
+import cv2
+import os
+from pathlib import Path
+import json
+import time
+
+
+class SensorDataProcessor:
+    """传感器数据处理器"""
+    
+    def __init__(self, config):
+        """
+        初始化数据处理器
+        
+        Args:
+            config: 配置字典，参见 data_processor_config.py
+        """
+        self.config = config
+        self.enabled = config.get('enabled', True)
+        self.frame_count = 0
+        self.stats = {
+            'total_frames': 0,
+            'rgb_processed': 0,
+            'lidar_processed': 0,
+            'gps_processed': 0,
+        }
+        
+        # 创建日志目录
+        advanced_config = config.get('advanced', {})
+        if advanced_config.get('log_data', False):
+            self.log_path = Path(advanced_config.get('log_path', './data_logs'))
+            self.log_path.mkdir(parents=True, exist_ok=True)
+        else:
+            self.log_path = None
+        
+        if advanced_config.get('save_comparison', False):
+            self.comparison_path = Path(advanced_config.get('comparison_path', './data_comparison'))
+            self.comparison_path.mkdir(parents=True, exist_ok=True)
+        else:
+            self.comparison_path = None
+    
+    def process_rgb(self, rgb_image, sensor_id='rgb'):
+        """
+        处理 RGB 图像
+        
+        Args:
+            rgb_image: numpy array, shape (H, W, 3), RGB 格式
+            sensor_id: 传感器 ID（用于保存对比图像）
+        
+        Returns:
+            处理后的 RGB 图像，shape (H, W, 3)
+        """
+        if not self.enabled:
+            return rgb_image
+        
+        # 保存原始图像（如果需要对比）
+        original = rgb_image.copy() if self.comparison_path else None
+        
+        # 确保是浮点数类型以便处理
+        processed = rgb_image.astype(np.float32)
+        
+        rgb_config = self.config.get('rgb', {})
+        has_changes = False
+        
+        # 1. 高斯噪声
+        if rgb_config.get('add_gaussian_noise', {}).get('enabled', False):
+            noise_cfg = rgb_config['add_gaussian_noise']
+            noise = np.random.normal(noise_cfg['mean'], noise_cfg['std'], processed.shape)
+            processed = processed + noise
+            has_changes = True
+        
+        # 2. 亮度调整
+        if rgb_config.get('brightness', {}).get('enabled', False):
+            factor = rgb_config['brightness']['factor']
+            processed = processed * factor
+            has_changes = True
+        
+        # 3. 对比度调整
+        if rgb_config.get('contrast', {}).get('enabled', False):
+            factor = rgb_config['contrast']['factor']
+            mean = processed.mean(axis=(0, 1), keepdims=True)
+            processed = (processed - mean) * factor + mean
+            has_changes = True
+        
+        # 4. 饱和度调整
+        if rgb_config.get('saturation', {}).get('enabled', False):
+            factor = rgb_config['saturation']['factor']
+            # 转换到 HSV
+            processed_uint8 = np.clip(processed, 0, 255).astype(np.uint8)
+            hsv = cv2.cvtColor(processed_uint8, cv2.COLOR_RGB2HSV).astype(np.float32)
+            hsv[:, :, 1] = np.clip(hsv[:, :, 1] * factor, 0, 255)
+            processed = cv2.cvtColor(hsv.astype(np.uint8), cv2.COLOR_HSV2RGB).astype(np.float32)
+            has_changes = True
+        
+        # 5. 色彩偏移
+        if rgb_config.get('color_shift', {}).get('enabled', False):
+            shift_cfg = rgb_config['color_shift']
+            processed[:, :, 0] += shift_cfg.get('r_shift', 0)
+            processed[:, :, 1] += shift_cfg.get('g_shift', 0)
+            processed[:, :, 2] += shift_cfg.get('b_shift', 0)
+            has_changes = True
+        
+        # 裁剪到有效范围并转回 uint8
+        processed = np.clip(processed, 0, 255).astype(np.uint8)
+        
+        # 6. 模糊（需要在 uint8 上操作）
+        if rgb_config.get('blur', {}).get('enabled', False):
+            kernel = rgb_config['blur']['kernel_size']
+            if kernel % 2 == 0:
+                kernel += 1  # 确保是奇数
+            processed = cv2.GaussianBlur(processed, (kernel, kernel), 0)
+            has_changes = True
+        
+        # 7. 像素丢失
+        if rgb_config.get('pixel_dropout', {}).get('enabled', False):
+            rate = rgb_config['pixel_dropout']['rate']
+            mask = np.random.random(processed.shape[:2]) < rate
+            processed[mask] = 0  # 丢失的像素设为黑色
+            has_changes = True
+        
+        # 保存对比图
+        if self.comparison_path and original is not None and has_changes:
+            self._save_comparison(original, processed, sensor_id)
+        
+        self.stats['rgb_processed'] += 1
+        return processed
+    
+    def process_lidar(self, lidar_data):
+        """
+        处理 LiDAR 点云数据
+        
+        Args:
+            lidar_data: numpy array, shape (N, 4), 每行为 [x, y, z, intensity]
+        
+        Returns:
+            处理后的点云数据，shape (M, 4)，M <= N
+        """
+        if not self.enabled or len(lidar_data) == 0:
+            return lidar_data
+        
+        processed = lidar_data.copy()
+        lidar_config = self.config.get('lidar', {})
+        
+        # 1. 位置噪声
+        if lidar_config.get('noise', {}).get('enabled', False):
+            std = lidar_config['noise']['std']
+            noise = np.random.normal(0, std, processed[:, :3].shape)
+            processed[:, :3] += noise
+        
+        # 2. 强度噪声
+        if lidar_config.get('intensity_noise', {}).get('enabled', False) and processed.shape[1] >= 4:
+            std = lidar_config['intensity_noise']['std']
+            noise = np.random.normal(0, std, processed[:, 3].shape)
+            processed[:, 3] = np.clip(processed[:, 3] + noise, 0, 1)
+        
+        # 3. 距离限制
+        if lidar_config.get('range_limit', {}).get('enabled', False):
+            range_cfg = lidar_config['range_limit']
+            max_range = range_cfg.get('max_range', 50.0)
+            min_range = range_cfg.get('min_range', 0.0)
+            
+            distances = np.linalg.norm(processed[:, :3], axis=1)
+            range_mask = (distances >= min_range) & (distances <= max_range)
+            processed = processed[range_mask]
+        
+        # 4. 点云丢失（在距离过滤后进行）
+        if lidar_config.get('dropout', {}).get('enabled', False):
+            rate = lidar_config['dropout']['rate']
+            if len(processed) > 0:
+                keep_mask = np.random.random(len(processed)) > rate
+                processed = processed[keep_mask]
+        
+        self.stats['lidar_processed'] += 1
+        return processed
+    
+    def process_gps(self, gps):
+        """
+        处理 GPS 数据
+        
+        Args:
+            gps: numpy array, shape (2,) 或 (3,), [latitude, longitude] 或 [lat, lon, alt]
+        
+        Returns:
+            处理后的 GPS 数据
+        """
+        if not self.enabled:
+            return gps
+        
+        gps_config = self.config.get('gps', {})
+        processed = gps.copy()
+        
+        # 1. GPS 漂移（高斯噪声）
+        if gps_config.get('drift', {}).get('enabled', False):
+            std = gps_config['drift']['std']
+            drift = np.random.normal(0, std, gps.shape)
+            processed += drift
+        
+        # 2. 随机跳变（模拟信号丢失）
+        if gps_config.get('random_jump', {}).get('enabled', False):
+            jump_cfg = gps_config['random_jump']
+            if np.random.random() < jump_cfg.get('probability', 0.01):
+                max_distance = jump_cfg.get('max_distance', 5.0)
+                jump = np.random.uniform(-max_distance, max_distance, gps.shape)
+                processed += jump
+        
+        self.stats['gps_processed'] += 1
+        return processed
+    
+    def process_speed(self, speed):
+        """
+        处理速度数据
+        
+        Args:
+            speed: float, 速度值（m/s）
+        
+        Returns:
+            处理后的速度值
+        """
+        if not self.enabled:
+            return speed
+        
+        speed_config = self.config.get('speed', {})
+        processed = speed
+        
+        # 1. 测量误差（高斯噪声）
+        if speed_config.get('error', {}).get('enabled', False):
+            std = speed_config['error']['std']
+            error = np.random.normal(0, std)
+            processed += error
+        
+        # 2. 系统偏差
+        if speed_config.get('bias', {}).get('enabled', False):
+            bias = speed_config['bias']['value']
+            processed += bias
+        
+        # 速度不能为负
+        processed = max(0, processed)
+        
+        return processed
+    
+    def process_compass(self, compass):
+        """
+        处理罗盘数据
+        
+        Args:
+            compass: float, 罗盘方向（弧度）
+        
+        Returns:
+            处理后的罗盘方向
+        """
+        if not self.enabled:
+            return compass
+        
+        compass_config = self.config.get('compass', {})
+        processed = compass
+        
+        # 1. 方向误差（高斯噪声）
+        if compass_config.get('error', {}).get('enabled', False):
+            std = compass_config['error']['std']
+            error = np.random.normal(0, std)
+            processed += error
+        
+        # 2. 磁偏角（恒定偏移）
+        if compass_config.get('declination', {}).get('enabled', False):
+            declination = compass_config['declination']['value']
+            processed += declination
+        
+        # 归一化到 [-pi, pi]
+        while processed > np.pi:
+            processed -= 2 * np.pi
+        while processed < -np.pi:
+            processed += 2 * np.pi
+        
+        return processed
+    
+    def _save_comparison(self, original, processed, sensor_id):
+        """
+        保存原始图像和处理后图像的对比
+        
+        Args:
+            original: 原始图像
+            processed: 处理后图像
+            sensor_id: 传感器 ID
+        """
+        try:
+            # 水平拼接
+            comparison = np.hstack([original, processed])
+            
+            # 添加文字标签
+            font = cv2.FONT_HERSHEY_SIMPLEX
+            cv2.putText(comparison, 'Original', (10, 30), font, 1, (255, 255, 255), 2)
+            cv2.putText(comparison, 'Processed', (original.shape[1] + 10, 30), font, 1, (255, 255, 255), 2)
+            
+            # 保存
+            filename = f"{sensor_id}_{self.frame_count:06d}.jpg"
+            cv2.imwrite(
+                str(self.comparison_path / filename),
+                cv2.cvtColor(comparison, cv2.COLOR_RGB2BGR)
+            )
+        except Exception as e:
+            print(f"Warning: Failed to save comparison image: {e}")
+    
+    def next_frame(self):
+        """移动到下一帧"""
+        self.frame_count += 1
+        self.stats['total_frames'] += 1
+        
+        # 打印统计信息
+        advanced_config = self.config.get('advanced', {})
+        if advanced_config.get('print_stats', False):
+            interval = advanced_config.get('stats_interval', 100)
+            if self.frame_count % interval == 0:
+                self.print_stats()
+    
+    def print_stats(self):
+        """打印统计信息"""
+        print("=" * 50)
+        print("Sensor Data Processor Statistics")
+        print("=" * 50)
+        print(f"Total Frames:     {self.stats['total_frames']}")
+        print(f"RGB Processed:    {self.stats['rgb_processed']}")
+        print(f"LiDAR Processed:  {self.stats['lidar_processed']}")
+        print(f"GPS Processed:    {self.stats['gps_processed']}")
+        print("=" * 50)
+    
+    def reset_stats(self):
+        """重置统计信息"""
+        self.stats = {
+            'total_frames': 0,
+            'rgb_processed': 0,
+            'lidar_processed': 0,
+            'gps_processed': 0,
+        }
+    
+    def save_stats(self, filename='processor_stats.json'):
+        """保存统计信息到文件"""
+        if self.log_path:
+            stats_file = self.log_path / filename
+            with open(stats_file, 'w') as f:
+                json.dump(self.stats, f, indent=4)
+            print(f"Statistics saved to {stats_file}")
+    
+    def get_config_summary(self):
+        """获取配置摘要"""
+        summary = {
+            'enabled': self.enabled,
+            'rgb_effects': [],
+            'lidar_effects': [],
+            'gps_effects': [],
+            'other_effects': [],
+        }
+        
+        if not self.enabled:
+            return summary
+        
+        # RGB 效果
+        rgb_config = self.config.get('rgb', {})
+        for effect, cfg in rgb_config.items():
+            if cfg.get('enabled', False):
+                summary['rgb_effects'].append(effect)
+        
+        # LiDAR 效果
+        lidar_config = self.config.get('lidar', {})
+        for effect, cfg in lidar_config.items():
+            if cfg.get('enabled', False):
+                summary['lidar_effects'].append(effect)
+        
+        # GPS 效果
+        gps_config = self.config.get('gps', {})
+        for effect, cfg in gps_config.items():
+            if cfg.get('enabled', False):
+                summary['gps_effects'].append(effect)
+        
+        # 其他效果
+        for sensor in ['speed', 'compass']:
+            sensor_config = self.config.get(sensor, {})
+            for effect, cfg in sensor_config.items():
+                if cfg.get('enabled', False):
+                    summary['other_effects'].append(f"{sensor}_{effect}")
+        
+        return summary
+
+
+# ========== 工具函数 ==========
+
+def test_processor():
+    """测试数据处理器"""
+    from data_processor_config import CONFIG_MODERATE_NOISE
+    import matplotlib.pyplot as plt
+    
+    print("Testing SensorDataProcessor...")
+    
+    # 创建处理器
+    processor = SensorDataProcessor(CONFIG_MODERATE_NOISE)
+    
+    # 测试 RGB 处理
+    print("\n1. Testing RGB processing...")
+    test_image = np.random.randint(0, 255, (600, 800, 3), dtype=np.uint8)
+    processed_image = processor.process_rgb(test_image)
+    print(f"   Original shape: {test_image.shape}, Processed shape: {processed_image.shape}")
+    
+    # 测试 LiDAR 处理
+    print("\n2. Testing LiDAR processing...")
+    test_lidar = np.random.randn(10000, 4).astype(np.float32)
+    processed_lidar = processor.process_lidar(test_lidar)
+    print(f"   Original points: {len(test_lidar)}, Processed points: {len(processed_lidar)}")
+    
+    # 测试 GPS 处理
+    print("\n3. Testing GPS processing...")
+    test_gps = np.array([40.0, -75.0])
+    processed_gps = processor.process_gps(test_gps)
+    print(f"   Original GPS: {test_gps}, Processed GPS: {processed_gps}")
+    
+    # 测试速度处理
+    print("\n4. Testing speed processing...")
+    test_speed = 10.0
+    processed_speed = processor.process_speed(test_speed)
+    print(f"   Original speed: {test_speed}, Processed speed: {processed_speed}")
+    
+    # 测试罗盘处理
+    print("\n5. Testing compass processing...")
+    test_compass = 1.57  # π/2
+    processed_compass = processor.process_compass(test_compass)
+    print(f"   Original compass: {test_compass}, Processed compass: {processed_compass}")
+    
+    # 配置摘要
+    print("\n6. Configuration summary:")
+    summary = processor.get_config_summary()
+    for key, value in summary.items():
+        if value and value != []:
+            print(f"   {key}: {value}")
+    
+    print("\n✅ All tests completed successfully!")
+
+
+if __name__ == "__main__":
+    test_processor()
+

@@ -1,0 +1,231 @@
+╔══════════════════════════════════════════════════════════════════════╗
+║         ✅ SwinIR 已集成到数据处理器 - 2025-11-04                    ║
+╚══════════════════════════════════════════════════════════════════════╝
+
+📝 集成说明
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+SwinIR 图像处理功能已成功集成到 SensorDataProcessor 中，作为 RGB 
+图像处理流程的一部分。
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🔧 修改的文件
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. data_processor.py
+   ✅ 添加了 _init_swinir() 方法
+   ✅ 在 __init__() 中初始化 SwinIR 处理器
+   ✅ 在 process_rgb() 中添加 SwinIR 处理步骤
+   ✅ 更新了统计信息（增加 swinir_processed）
+   ✅ 更新了 print_stats() 显示 SwinIR 统计
+
+2. data_processor_config.py
+   ✅ 添加了 'swinir' 配置项（在 rgb 配置下）
+   ✅ 使用 main_test_swinir.py 的默认参数
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚙️  SwinIR 配置参数
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+参数                    默认值                          说明
+──────────────────────────────────────────────────────────────
+enabled                 False                           是否启用
+model_path              .../005_colorDN...noise15.pth   模型文件路径
+task                    'color_dn'                      任务类型
+upscale                 1                               放大倍数
+noise                   15                              噪声等级
+jpeg                    40                              JPEG 质量
+training_patch_size     128                             训练 patch 大小
+tile                    None                            瓦片大小
+tile_overlap            32                              瓦片重叠
+device                  'cuda'                          运行设备
+half_precision          False                           半精度推理
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+💡 使用方法
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+方法 1: 修改 data_processor_config.py 启用 SwinIR
+──────────────────────────────────────────────────────────────
+在 DATA_PROCESSOR_CONFIG 中找到:
+
+    'rgb': {
+        # ... 其他配置 ...
+        
+        'swinir': {
+            'enabled': True,  # ← 改为 True
+            # 其他参数使用默认值即可
+        },
+    },
+
+
+方法 2: 创建自定义配置
+──────────────────────────────────────────────────────────────
+# 彩色去噪配置
+CONFIG_SWINIR_DENOISE = {
+    'enabled': True,
+    'rgb': {
+        'swinir': {
+            'enabled': True,
+            'task': 'color_dn',
+            'noise': 15,
+            'model_path': '/home/nju/InterFuser/process_mothod/SwinIR/model_zoo/swinir/005_colorDN_DFWB_s128w8_SwinIR-M_noise15.pth',
+        },
+    },
+}
+
+# 超分辨率配置
+CONFIG_SWINIR_SR = {
+    'enabled': True,
+    'rgb': {
+        'swinir': {
+            'enabled': True,
+            'task': 'classical_sr',
+            'upscale': 2,
+            'model_path': '/home/nju/InterFuser/process_mothod/SwinIR/model_zoo/swinir/001_classicalSR_DF2K_s64w8_SwinIR-M_x2.pth',
+        },
+    },
+}
+
+ACTIVE_CONFIG = CONFIG_SWINIR_DENOISE  # 或 CONFIG_SWINIR_SR
+
+
+方法 3: 代码中使用
+──────────────────────────────────────────────────────────────
+from data_processor import SensorDataProcessor
+from data_processor_config import ACTIVE_CONFIG
+
+# 创建处理器（会自动初始化 SwinIR）
+processor = SensorDataProcessor(ACTIVE_CONFIG)
+
+# 处理图像
+processed_image = processor.process_rgb(rgb_image)
+# SwinIR 会在处理流程的最后自动应用
+
+# 查看统计
+processor.print_stats()
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🔄 处理流程
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+RGB 图像处理顺序:
+
+  原始图像
+     ↓
+  1. 高斯噪声
+     ↓
+  2. 亮度调整
+     ↓
+  3. 对比度调整
+     ↓
+  4. 饱和度调整
+     ↓
+  5. 色彩偏移
+     ↓
+  6. 模糊
+     ↓
+  7. 像素丢失
+     ↓
+  8. SwinIR 处理 ✨ (新增)
+     ↓
+  输出图像
+
+说明: SwinIR 放在处理链的最后，可以对前面所有处理
+      的结果进行修复/增强/超分辨率等操作。
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📊 统计信息输出示例
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+启用 SwinIR 后，统计信息会显示:
+
+==================================================
+Sensor Data Processor Statistics
+==================================================
+Total Frames:       100
+RGB Processed:      100
+  └─ SwinIR Applied: 100
+LiDAR Processed:    100
+GPS Processed:      100
+==================================================
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🎯 应用场景
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. 去噪 + SwinIR
+   先添加噪声，再用 SwinIR 去噪，测试去噪效果
+
+2. 降采样 + SwinIR SR
+   先降低图像分辨率，再用 SwinIR 超分辨率恢复
+
+3. 模糊 + SwinIR
+   先模糊图像，再用 SwinIR 增强
+
+4. JPEG 压缩 + SwinIR
+   模拟 JPEG 压缩，再用 SwinIR 修复伪影
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚠️  重要提示
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. 模型文件
+   - 首次使用需要下载模型文件
+   - 确保 model_path 指向正确的模型文件
+   - 不同任务需要不同的模型
+
+2. 性能影响
+   - SwinIR 是深度学习模型，推理较慢
+   - 建议使用 GPU (device='cuda')
+   - 可启用半精度加速 (half_precision=True)
+   - 大图像可使用 tile 处理
+
+3. 任务类型与模型匹配
+   - task='color_dn' 需要去噪模型
+   - task='classical_sr' 需要 SR 模型
+   - task='jpeg_car' 需要 JPEG 修复模型
+
+4. 初始化提示
+   - 初始化成功会显示: ✅ SwinIR 处理器已集成到数据处理器中
+   - 初始化失败会显示警告，但不影响其他处理
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🧪 测试
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+快速测试 SwinIR 集成:
+
+cd /home/nju/InterFuser/sensor_data_processor_module
+
+# 修改配置启用 SwinIR
+vim data_processor_config.py
+# 将 'swinir': {'enabled': False} 改为 True
+
+# 测试导入
+python3 << 'PYEOF'
+from data_processor import SensorDataProcessor
+from data_processor_config import DATA_PROCESSOR_CONFIG
+import numpy as np
+
+# 启用 SwinIR
+config = DATA_PROCESSOR_CONFIG.copy()
+config['rgb']['swinir']['enabled'] = True
+
+# 创建处理器
+processor = SensorDataProcessor(config)
+
+# 测试处理
+test_image = np.random.randint(0, 256, (100, 100, 3), dtype=np.uint8)
+output = processor.process_rgb(test_image)
+
+print(f"输入形状: {test_image.shape}")
+print(f"输出形状: {output.shape}")
+print("✅ SwinIR 集成测试成功！")
+PYEOF
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+集成完成！ 🎉
+
+═══════════════════════════════════════════════════════════════════════

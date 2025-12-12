@@ -1,0 +1,39 @@
+# Python cache
+__pycache__/
+**/__pycache__/
+*.py[cod]
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Data and experiment outputs
+data/
+data/**
+results/
+results/**
+
+# CARLA installation and large binaries
+carla/
+carla/**
+
+# Logs
+logs/
+*.log
+
+# Model checkpoints / weights
+*.pth
+*.pth.tar
+*.pt
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Ignore nested LMDrive repo in this repo
+LMDrive/
+LMDrive/**
+
+# Images: do not track new JPG files (existing tracked JPGs不受影响)
+*.jpg
+*.jpeg

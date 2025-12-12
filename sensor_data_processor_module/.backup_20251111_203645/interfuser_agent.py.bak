@@ -372,10 +372,9 @@ class InterfuserAgent(autonomous_agent.AutonomousAgent):
         if self.enable_performance_monitoring:
             rgb_start = time.time()
         
-        # 批量处理三路 RGB 图像
-        images_to_process = [rgb, rgb_left, rgb_right]
-        processed_images = self.data_processor.process_rgb_batch(images_to_process)
-        rgb, rgb_left, rgb_right = processed_images[0], processed_images[1], processed_images[2]
+        rgb = self.data_processor.process_rgb(rgb, 'rgb')
+        rgb_left = self.data_processor.process_rgb(rgb_left, 'rgb_left')
+        rgb_right = self.data_processor.process_rgb(rgb_right, 'rgb_right')
         
         if self.enable_performance_monitoring:
             self.processing_times['rgb'].append(time.time() - rgb_start)
