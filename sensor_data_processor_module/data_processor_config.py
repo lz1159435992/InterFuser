@@ -25,6 +25,16 @@
 """
 
 import os
+from pathlib import Path
+
+_THIS_FILE = Path(__file__).resolve()
+if _THIS_FILE.parent.name == 'team_code' and _THIS_FILE.parent.parent.name == 'leaderboard':
+    PROJECT_ROOT = _THIS_FILE.parents[2]
+else:
+    PROJECT_ROOT = _THIS_FILE.parents[1]
+PROCESS_METHOD_ROOT = os.environ.get('PROCESS_METHOD_ROOT', str(PROJECT_ROOT / 'process_mothod'))
+SWINIR_MODEL_DIR = Path(PROCESS_METHOD_ROOT) / 'SwinIR' / 'model_zoo' / 'swinir'
+SRGAN_MODEL_DIR = Path(PROCESS_METHOD_ROOT) / 'SRGAN' / 'results'
 
 # ============================================================
 # 🎛️ 总开关 - 最简单的控制方法
@@ -49,7 +59,7 @@ DATA_PROCESSOR_CONFIG = {
         'enabled': False,  # 是否启用 SwinIR（需要先下载模型）
         
         # 模型路径（必需）
-        'model_path': '/home/nju/InterFuser/process_mothod/SwinIR/model_zoo/swinir/005_colorDN_DFWB_s128w8_SwinIR-M_noise15.pth',
+        'model_path': str(SWINIR_MODEL_DIR / '005_colorDN_DFWB_s128w8_SwinIR-M_noise15.pth'),
         
         # 任务类型（与 main_test_swinir.py 一致）
         # 可选: 'classical_sr', 'lightweight_sr', 'real_sr', 
@@ -84,7 +94,7 @@ DATA_PROCESSOR_CONFIG = {
         'enabled': False,  # 是否启用 SRGAN
         
         # 模型路径（必需）
-        'model_path': '/home/nju/InterFuser/process_mothod/SRGAN/results/checkpoint_srgan.pth',
+        'model_path': str(SRGAN_MODEL_DIR / 'checkpoint_srgan.pth'),
         
         # 设备
         'device': 'cpu',  # 'cuda' 或 'cpu'
@@ -127,7 +137,7 @@ CONFIG_COLOR_DENOISE = {
     'enabled': True,
     'swinir': {
         'enabled': True,
-        'model_path': '/home/nju/InterFuser/process_mothod/SwinIR/model_zoo/swinir/005_colorDN_DFWB_s128w8_SwinIR-M_noise15.pth',
+        'model_path': str(SWINIR_MODEL_DIR / '005_colorDN_DFWB_s128w8_SwinIR-M_noise15.pth'),
         'task': 'color_dn',
         'upscale': 1,
         'noise': 15,
@@ -148,7 +158,7 @@ CONFIG_COLOR_DENOISE_25 = {
     'enabled': True,
     'swinir': {
         'enabled': True,
-        'model_path': '/home/nju/InterFuser/process_mothod/SwinIR/model_zoo/swinir/005_colorDN_DFWB_s128w8_SwinIR-M_noise25.pth',
+        'model_path': str(SWINIR_MODEL_DIR / '005_colorDN_DFWB_s128w8_SwinIR-M_noise25.pth'),
         'task': 'color_dn',
         'upscale': 1,
         'noise': 25,
@@ -167,7 +177,7 @@ CONFIG_COLOR_DENOISE_50 = {
     'enabled': True,
     'swinir': {
         'enabled': True,
-        'model_path': '/home/nju/InterFuser/process_mothod/SwinIR/model_zoo/swinir/005_colorDN_DFWB_s128w8_SwinIR-M_noise50.pth',
+        'model_path': str(SWINIR_MODEL_DIR / '005_colorDN_DFWB_s128w8_SwinIR-M_noise50.pth'),
         'task': 'color_dn',
         'upscale': 1,
         'noise': 50,
@@ -186,7 +196,7 @@ CONFIG_SR_2X = {
     'enabled': True,
     'swinir': {
         'enabled': True,
-        'model_path': '/home/nju/InterFuser/process_mothod/SwinIR/model_zoo/swinir/001_classicalSR_DF2K_s64w8_SwinIR-M_x2.pth',
+        'model_path': str(SWINIR_MODEL_DIR / '001_classicalSR_DF2K_s64w8_SwinIR-M_x2.pth'),
         'task': 'classical_sr',
         'upscale': 2,
         'training_patch_size': 128,
@@ -204,7 +214,7 @@ CONFIG_SR_4X = {
     'enabled': True,
     'swinir': {
         'enabled': True,
-        'model_path': '/home/nju/InterFuser/process_mothod/SwinIR/model_zoo/swinir/001_classicalSR_DF2K_s64w8_SwinIR-M_x4.pth',
+        'model_path': str(SWINIR_MODEL_DIR / '001_classicalSR_DF2K_s64w8_SwinIR-M_x4.pth'),
         'task': 'classical_sr',
         'upscale': 4,
         'training_patch_size': 128,
@@ -223,7 +233,7 @@ CONFIG_JPEG_REPAIR = {
     'processor_type': 'swinir',
     'swinir': {
         'enabled': True,
-        'model_path': '/home/nju/InterFuser/process_mothod/SwinIR/model_zoo/swinir/006_CAR_DFWB_s126w7_SwinIR-M_jpeg40.pth',
+        'model_path': str(SWINIR_MODEL_DIR / '006_CAR_DFWB_s126w7_SwinIR-M_jpeg40.pth'),
         'task': 'jpeg_car',
         'upscale': 1,
         'jpeg': 40,
@@ -245,7 +255,7 @@ CONFIG_SRGAN_2X = {
     'swinir': {'enabled': False},
     'srgan': {
         'enabled': True,
-        'model_path': '/home/nju/InterFuser/process_mothod/SRGAN/results/checkpoint_srgan.pth',
+        'model_path': str(SRGAN_MODEL_DIR / 'checkpoint_srgan.pth'),
         'device': 'cpu',
         'half_precision': False,
         'output_scale': 2,  # 2x 输出（与原始 test.py 一致）⭐
@@ -263,7 +273,7 @@ CONFIG_SRGAN_ENHANCE = {
     'swinir': {'enabled': False},
     'srgan': {
         'enabled': True,
-        'model_path': '/home/nju/InterFuser/process_mothod/SRGAN/results/checkpoint_srgan.pth',
+        'model_path': str(SRGAN_MODEL_DIR / 'checkpoint_srgan.pth'),
         'device': 'cpu',
         'half_precision': False,
         'output_scale': 1,  # 1x 输出（增强模式）
@@ -281,16 +291,12 @@ CONFIG_SRGAN_4X = {
     'swinir': {'enabled': False},
     'srgan': {
         'enabled': True,
-        'model_path': '/home/nju/InterFuser/process_mothod/SRGAN/results/checkpoint_srgan.pth',
+        'model_path': str(SRGAN_MODEL_DIR / 'checkpoint_srgan.pth'),
         'device': 'cpu',
         'half_precision': False,
         'output_scale': 4,  # 4x 输出（完整超分辨率）
     },
 }
-
-
-# ============================================================
-# 🎯 激活配置选择
 # ============================================================
 # 
 # 可选配置：
@@ -366,4 +372,39 @@ if CONFIG_TYPE:
     elif CONFIG_TYPE == "custom":
         ACTIVE_CONFIG = DATA_PROCESSOR_CONFIG
     # 未知值时保持原有 ACTIVE_CONFIG 不变，以避免意外崩溃
+
+_OVERRIDE_DEVICE = os.environ.get("DATA_PROCESSOR_DEVICE", "").strip()
+_GPU_ID = os.environ.get("DATA_PROCESSOR_GPU_ID", "").strip()
+if (not _OVERRIDE_DEVICE) and _GPU_ID:
+    _OVERRIDE_DEVICE = f"cuda:{_GPU_ID}"
+
+if _OVERRIDE_DEVICE:
+    swinir_cfg = ACTIVE_CONFIG.get("swinir")
+    if isinstance(swinir_cfg, dict):
+        swinir_cfg["device"] = _OVERRIDE_DEVICE
+
+    _HALF = os.environ.get("DATA_PROCESSOR_HALF", "").strip()
+    _TILE = os.environ.get("DATA_PROCESSOR_TILE", "").strip()
+    _TILE_OVERLAP = os.environ.get("DATA_PROCESSOR_TILE_OVERLAP", "").strip()
+
+    if isinstance(swinir_cfg, dict):
+        if _HALF:
+            swinir_cfg["half_precision"] = _HALF.lower() in {"1", "true", "yes", "y", "on"}
+        if _TILE:
+            if _TILE.lower() in {"none", "null", "-1"}:
+                swinir_cfg["tile"] = None
+            else:
+                try:
+                    swinir_cfg["tile"] = int(_TILE)
+                except Exception:
+                    pass
+        if _TILE_OVERLAP:
+            try:
+                swinir_cfg["tile_overlap"] = int(_TILE_OVERLAP)
+            except Exception:
+                pass
+
+    srgan_cfg = ACTIVE_CONFIG.get("srgan")
+    if isinstance(srgan_cfg, dict):
+        srgan_cfg["device"] = _OVERRIDE_DEVICE
 

@@ -579,6 +579,20 @@ bash leaderboard/scripts/run_evaluation_lmdrive_with_processor.sh langauto_long 
 bash leaderboard/scripts/run_evaluation_lmdrive_with_processor.sh langauto_tiny no_processing
 ```
 
+补充说明（避免 `(base)` 下直接运行时报错）：
+
+- 如果你在 **未激活 `lmdrive`** 的情况下直接运行脚本，可能会出现：
+
+```text
+Error: numpy not found for python3. Activate the lmdrive environment or set PYTHON_BIN to a python with numpy.
+```
+
+- 你当前仓库版本的 `run_evaluation_lmdrive_with_processor.sh` 已增加自动处理：当检测到 `PYTHON_BIN` 无法 `import numpy` 时，会尝试 `conda activate lmdrive` 再继续运行。
+- 相关可覆盖环境变量：
+  - `AUTO_CONDA_ACTIVATE=0`：禁用自动 conda 激活（完全保持原行为）
+  - `CONDA_ENV_NAME=lmdrive`：指定要激活的 conda 环境名
+  - `PYTHON_BIN=/path/to/python`：强制指定 python 解释器
+
 支持的 `EVAL_TYPE`：
 
 - `langauto_long`
@@ -738,6 +752,49 @@ export LMDRIVE_HEADLESS=1
 
 （这部分是否需要取决于你的服务器环境；不影响 Python 侧截图保存逻辑。）
 
+### 7.3 Headless CARLA 稳定启动（推荐做法：xvfb + 干净环境）
+
+当服务器环境没有真实显示器/桌面时，CARLA 可能出现：
+
+- 启动后立刻退出（秒退）
+- `Segmentation fault`
+- 只有 `-nullrhi` 能稳定运行（说明问题集中在渲染栈：OpenGL/EGL/X11）
+
+推荐的排障顺序：
+
+1) 先用 `-nullrhi` 验证“非渲染逻辑”是否能跑起来：
+
+```bash
+${CARLA_ROOT}/CarlaUE4.sh --world-port=2000 -nullrhi -nosound
+```
+
+2) 如果 `-nullrhi` 能跑，但 `-opengl -RenderOffScreen` 不稳定，建议用 `xvfb-run` 提供虚拟 X：
+
+```bash
+xvfb-run -a -s "-screen 0 1280x720x24" \
+  ${CARLA_ROOT}/CarlaUE4.sh --world-port=2000 -opengl -RenderOffScreen -nosound -stdout -FullStdOutLogOutput
+```
+
+3) 如果仍不稳定，建议在启动 CARLA 时尽量“干净”地继承环境（避免 conda/LD_LIBRARY_PATH 污染）：
+
+```bash
+env -i HOME="$HOME" USER="$USER" PATH="$PATH" \
+  xvfb-run -a -s "-screen 0 1280x720x24" \
+  ${CARLA_ROOT}/CarlaUE4.sh --world-port=2000 -opengl -RenderOffScreen -nosound -stdout -FullStdOutLogOutput
+```
+
+你当前 LMDrive 脚本已把上述逻辑集成成环境变量开关（更推荐直接用脚本而不是手写命令）：
+
+- `CARLA_USE_XVFB=1`：用 `xvfb-run` 包裹 CARLA
+- `CARLA_XVFB_SCREEN=1280x720x24`：虚拟屏幕参数（通常无需改）
+- `CARLA_USE_ENV_I=1`：使用 `env -i ...` 尽量干净地启动
+- `CLEAN_CARLA_ENV=1`：启动前 `unset LD_LIBRARY_PATH/CONDA_*` 等（避免 conda 污染）
+
+重要说明：
+
+- `CARLA_XVFB_SCREEN` 只影响“虚拟桌面”的分辨率，不会改变相机 sensor 的 `image_size_x/y`，因此通常不会改变 leaderboard 的测评结果；它主要影响 CARLA 能否稳定初始化渲染。
+- CARLA 不建议用 root 启动（你当前脚本对 `START_CARLA=1` + root 已直接拒绝执行）。
+
 ---
 
 ## 8. Processor 模块：性能与显存（SRGAN/SwinIR）
@@ -794,6 +851,28 @@ SRGAN/
 
 只跑 baseline（`CONFIG_TYPE=no_processing`）则不需要准备上述 `process_mothod`/模型文件。
 
+### 8.4 processor 使用指定 GPU（与 CARLA/主模型分卡）
+
+当你希望：
+
+- CARLA + LMDrive 主模型跑在 `cuda:0`
+- processor（SwinIR/SRGAN）跑在 `cuda:1`
+
+推荐做法是让进程可见多张卡，然后用环境变量把 processor 指到指定 GPU：
+
+```bash
+cd /home/nju/InterFuser/LMDrive
+CUDA_VISIBLE_DEVICES=0,1 \
+DATA_PROCESSOR_GPU_ID=1 \
+bash leaderboard/scripts/run_evaluation_lmdrive_with_processor.sh langauto_long denoise15
+```
+
+说明：
+
+- `CUDA_VISIBLE_DEVICES=0,1` 让当前进程同时“看到”两张卡。
+- `DATA_PROCESSOR_GPU_ID=1`（或 `DATA_PROCESSOR_DEVICE=cuda:1`）会覆盖 processor 的设备选择。
+- 如果你只设置了 `CUDA_VISIBLE_DEVICES=0`，那 processor 即使写 `cuda:1` 也会找不到对应设备。
+
 ---
 
 ## 9. 常见问题（排障速查）
@@ -849,6 +928,153 @@ rm -f /home/nju/InterFuser/LMDrive/results/sample_result.json
 - headless 下 DummyDisplay 返回黑 `surface`，如果保存的是 `surface` 就会黑屏。
 
 你已修复：headless 下 `save()` 用真实 RGB 拼接图保存。
+
+### 9.6 CARLA 启动秒退 / `Segmentation fault`（headless 常见）
+
+现象：
+
+- CARLA 日志里只打印少量初始化信息就退出
+- 或直接 `Segmentation fault (core dumped)`
+
+处理建议（按顺序尝试）：
+
+- 先用 `-nullrhi` 验证是否为渲染问题（见 7.3）
+- 再用 `-opengl -RenderOffScreen` + `xvfb-run`
+- 再尝试 `env -i` / `CLEAN_CARLA_ENV=1` 清理 conda 污染
+
+如果你通过脚本启动 CARLA：
+
+```bash
+CARLA_USE_XVFB=1 CARLA_USE_ENV_I=1 CLEAN_CARLA_ENV=1 \
+bash leaderboard/scripts/run_evaluation_lmdrive_with_processor.sh langauto_tiny no_processing
+```
+
+### 9.7 CARLA 启动了但没有跑起来：如何看日志
+
+你当前脚本会把 CARLA stdout/stderr 重定向到：
+
+```text
+LMDrive/results/carla_logs/carla_<PORT>_<timestamp>.log
+```
+
+如果 CARLA 早退，脚本会自动 `tail` 最后 120 行。你也可以手动看：
+
+```bash
+tail -n 200 results/carla_logs/carla_*.log
+```
+
+同时可检查 Unreal 引擎日志目录（不同环境路径可能不同）：
+
+- `${CARLA_ROOT}/CarlaUE4/Saved/Logs`
+- `${CARLA_ROOT}/Saved/Logs`
+- `~/.config/Epic/CarlaUE4/Saved/Logs`
+- `~/.config/Epic/UnrealEngine/CarlaUE4/Saved/Logs`
+
+### 9.8 端口占用 / 多次启动导致连接不上
+
+现象：
+
+- evaluator 连接 CARLA 超时
+- 或 CARLA 报端口已被占用
+
+建议：
+
+- 使用脚本默认的随机端口（避免与其他人冲突）
+- 或显式指定：
+
+```bash
+PORT=2000 bash leaderboard/scripts/run_evaluation.sh
+```
+
+### 9.9 `CARLA_USE_XVFB` / `CARLA_XVFB_SCREEN` 会不会影响最终得分？
+
+通常不会。
+
+- 它们主要解决“无显示环境下渲染初始化失败”的问题。
+- 相机 sensor 分辨率由 agent `sensors()` 决定（blueprint 的 `image_size_x/y`），与 xvfb 的“虚拟桌面分辨率”无关。
+
+### 9.10 截图分辨率与 leaderboard 结果的关系（LMDrive vs InterFuser）
+
+- LMDrive 的可视化拼接图通常为 `1200x900`，InterFuser 的可视化拼接图通常为 `1200x600`。
+- 这些是**显示/记录用的拼接画面**，不作为模型输入时通常不影响 leaderboard 得分。
+- 真正会影响结果的是：传感器 `width/height`、以及进入模型前的 resize/crop 等预处理。
+
+### 9.11 `OSError: Can't load tokenizer for 'bert-base-uncased'`
+
+原因（常见）：
+
+- 机器无法直接访问 HuggingFace，且本地 HF cache 不完整。
+- 设置了 `HF_HUB_OFFLINE=1` / `TRANSFORMERS_OFFLINE=1`，但本地没有对应缓存。
+
+修复思路：先在**联网 + 正确代理**环境下把 `bert-base-uncased` 的 tokenizer/config/weights 缓存到本地，然后评测时再切回 offline。
+
+如果你需要使用代理（示例：`http://114.212.84.31:7890`）：
+
+```bash
+conda activate lmdrive
+
+# 代理（同时建议 NO_PROXY 包含 localhost，避免影响本地 CARLA 连接）
+export http_proxy="http://114.212.84.31:7890"
+export https_proxy="http://114.212.84.31:7890"
+export HTTP_PROXY="http://114.212.84.31:7890"
+export HTTPS_PROXY="http://114.212.84.31:7890"
+export NO_PROXY="localhost,127.0.0.1,::1"
+export no_proxy="localhost,127.0.0.1,::1"
+
+# 下载阶段不要开离线
+unset HF_HUB_OFFLINE
+unset TRANSFORMERS_OFFLINE
+
+python - <<'PY'
+from transformers import BertTokenizer, BertConfig, BertLMHeadModel
+BertTokenizer.from_pretrained("bert-base-uncased")
+BertConfig.from_pretrained("bert-base-uncased")
+BertLMHeadModel.from_pretrained("bert-base-uncased")
+print("bert-base-uncased cached OK")
+PY
+```
+
+缓存完成后，正式评测前建议开启 offline，避免运行中再下载导致卡住：
+
+```bash
+export HF_HUB_OFFLINE=1
+export TRANSFORMERS_OFFLINE=1
+```
+
+### 9.12 从旧机器同步 LMDrive 权重（只同步模型文件）
+
+如果你需要从旧机器同步 LMDrive 目录内的权重文件（只拉取常见权重后缀，不同步大数据/日志等），可以用下面的 rsync 命令：
+
+```bash
+rsync -avhP --prune-empty-dirs \
+  --include='*/' \
+  --include='*.pth' --include='*.pth.tar' --include='*.pt' --include='*.ckpt' --include='*.safetensors' \
+  --exclude='*' \
+  nju@114.212.85.102:/home/nju/InterFuser/LMDrive/  /LZ/InterFuser/LMDrive/
+```
+
+说明：
+
+- 该命令会保留目录结构，但只同步匹配到的权重文件。
+- 需要你已具备到旧机器的 ssh 权限/密钥；首次连接可能需要手动确认 host key。
+
+补充 1：同步 `llava-v1.5-7b`（完整模型目录）
+
+- 如果你的 agent 配置里 `llm_model=/data/llava-v1.5-7b`，那么仅同步 `*.pth/*.pt` 等文件**不够**；还需要同步 `config.json`、tokenizer、以及 `pytorch_model-*.bin`/`model*.safetensors` 等分片。
+- 这类模型应当以一个“完整目录”形式存在，然后在运行前设置 `LMDRIVE_LLM_MODEL=/path/to/llava-v1.5-7b` 或创建 `/data/llava-v1.5-7b` 软链接指向该目录。
+
+示例：把旧机器 `/data/llava-v1.5-7b/` 同步到本机 `/data/llava-v1.5-7b/`：
+
+```bash
+sudo mkdir -p /data
+sudo rsync -avhP nju@114.212.85.102:/data/llava-v1.5-7b/ /data/llava-v1.5-7b/
+```
+
+补充 2：`/data` 写权限导致 `rsync` 失败
+
+- 常见现象：`mkdir "/data/llava-v1.5-7b" failed: Permission denied`。
+- 原因：`/data` 是 root 拥有，普通用户直接 `rsync ... /data/` 没有写权限。
+- 处理：对写入 `/data` 的 rsync 使用 `sudo rsync ...`。
 
 ---
 

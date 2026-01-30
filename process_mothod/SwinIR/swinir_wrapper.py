@@ -19,14 +19,19 @@ if CURRENT_DIR not in sys.path:
 import torch
 import numpy as np
 import cv2
+from contextlib import nullcontext
 
 try:
     from .models.network_swinir import SwinIR
 except ImportError as e:
-    print(f"⚠️  无法导入 SwinIR: {e}")
-    print(f"请确保在正确的目录: {CURRENT_DIR}")
-    print(f"swinir_wrapper.py 应该在 SwinIR/ 文件夹内部")
-    raise
+    try:
+        # 允许直接 `python swinir_wrapper.py` 或 `python example_usage.py` 运行
+        from models.network_swinir import SwinIR
+    except ImportError:
+        print(f"⚠️  无法导入 SwinIR: {e}")
+        print(f"请确保在正确的目录: {CURRENT_DIR}")
+        print(f"swinir_wrapper.py 应该在 SwinIR/ 文件夹内部")
+        raise
 
 
 class SwinIRProcessor:
@@ -125,14 +130,20 @@ class SwinIRProcessor:
             tile: 瓦片大小，None 表示整图处理，默认 None
             tile_overlap: 瓦片重叠大小，默认 32
         """
-        self.device = device if torch.cuda.is_available() else 'cpu'
-        if self.device == 'cuda' and not torch.cuda.is_available():
+        _wants_cuda = str(device).startswith('cuda')
+        self.device = device if (_wants_cuda and torch.cuda.is_available()) else 'cpu'
+        if _wants_cuda and not torch.cuda.is_available():
             print("⚠️  CUDA 不可用，使用 CPU")
             self.device = 'cpu'
+        if str(self.device).startswith('cuda'):
+            try:
+                torch.backends.cudnn.benchmark = True
+            except Exception:
+                pass
         
         self.task = task
         self.upscale = upscale
-        self.half_precision = half_precision and self.device == 'cuda'
+        self.half_precision = half_precision and str(self.device).startswith('cuda')
         self.noise = noise
         self.jpeg = jpeg
         self.training_patch_size = training_patch_size
@@ -269,40 +280,56 @@ class SwinIRProcessor:
             wei = torch.zeros((b, c, Hs, Ws), device=x.device, dtype=x.dtype)
             ys = list(range(0, max(h - tile_size + stride, 1), stride)) if h > tile_size else [0]
             xs = list(range(0, max(w - tile_size + stride, 1), stride)) if w > tile_size else [0]
+            tile_batch = os.environ.get('DATA_PROCESSOR_TILE_BATCH', '').strip()
+            try:
+                tile_batch = int(tile_batch) if tile_batch else 4
+            except Exception:
+                tile_batch = 4
+            tile_batch = max(1, tile_batch)
+
+            positions = []
             for y in ys:
                 y0 = min(y, max(h - tile_size, 0))
                 y1 = min(y0 + tile_size, h)
                 for x_ in xs:
                     x0 = min(x_, max(w - tile_size, 0))
                     x1 = min(x0 + tile_size, w)
-                    patch = x[:, :, y0:y1, x0:x1]
-                    ph, pw = patch.shape[-2], patch.shape[-1]
-                    with torch.no_grad():
-                        out_patch = self.model(patch)
+                    positions.append((y0, y1, x0, x1))
+
+            for i in range(0, len(positions), tile_batch):
+                batch_pos = positions[i:i + tile_batch]
+                patches = torch.cat([x[:, :, y0:y1, x0:x1] for (y0, y1, x0, x1) in batch_pos], dim=0)
+                out_patches = self.model(patches)
+                for j, (y0, y1, x0, x1) in enumerate(batch_pos):
+                    ph = y1 - y0
+                    pw = x1 - x0
                     Y0 = y0 * s
                     X0 = x0 * s
                     Y1 = Y0 + ph * s
                     X1 = X0 + pw * s
-                    out[:, :, Y0:Y1, X0:X1] += out_patch
+                    out[:, :, Y0:Y1, X0:X1] += out_patches[j:j+1]
                     wei[:, :, Y0:Y1, X0:X1] += 1
             wei = wei.clamp(min=1)
             return out / wei
 
+        amp_enabled = bool(self.half_precision and str(self.device).startswith('cuda'))
+        amp_ctx = torch.cuda.amp.autocast(enabled=amp_enabled) if str(self.device).startswith('cuda') else nullcontext()
         with torch.no_grad():
-            if self.tile is not None and (img_tensor.shape[-2] > int(self.tile) or img_tensor.shape[-1] > int(self.tile)):
-                output_tensor = _forward_with_tile(img_tensor, int(self.tile), int(self.tile_overlap))
-            else:
-                try:
-                    output_tensor = self.model(img_tensor)
-                except RuntimeError as e:
-                    if 'out of memory' in str(e).lower() and self.device == 'cuda':
-                        try:
-                            torch.cuda.empty_cache()
-                        except Exception:
-                            pass
-                        output_tensor = _forward_with_tile(img_tensor, 512, 32)
-                    else:
-                        raise
+            with amp_ctx:
+                if self.tile is not None and (img_tensor.shape[-2] > int(self.tile) or img_tensor.shape[-1] > int(self.tile)):
+                    output_tensor = _forward_with_tile(img_tensor, int(self.tile), int(self.tile_overlap))
+                else:
+                    try:
+                        output_tensor = self.model(img_tensor)
+                    except RuntimeError as e:
+                        if 'out of memory' in str(e).lower() and str(self.device).startswith('cuda'):
+                            try:
+                                torch.cuda.empty_cache()
+                            except Exception:
+                                pass
+                            output_tensor = _forward_with_tile(img_tensor, 512, 32)
+                        else:
+                            raise
         
         # 后处理: (1, 3, H', W') -> (H', W', 3)
         output = output_tensor.squeeze(0).permute(1, 2, 0)
@@ -318,12 +345,6 @@ class SwinIRProcessor:
             output = output * 255.0
         
         output = output.clip(0, 255).astype(np.uint8)
-
-        if self.device == 'cuda':
-            try:
-                torch.cuda.empty_cache()
-            except Exception:
-                pass
         
         # 更新统计
         self.process_count += 1

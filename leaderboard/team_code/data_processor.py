@@ -20,7 +20,12 @@ from pathlib import Path
 import json
 
 # 添加处理模块路径
-PROCESS_METHOD_ROOT = '/home/nju/InterFuser/process_mothod'
+_THIS_FILE = Path(__file__).resolve()
+if _THIS_FILE.parent.name == 'team_code' and _THIS_FILE.parent.parent.name == 'leaderboard':
+    PROJECT_ROOT = _THIS_FILE.parents[2]
+else:
+    PROJECT_ROOT = _THIS_FILE.parents[1]
+PROCESS_METHOD_ROOT = os.environ.get('PROCESS_METHOD_ROOT', str(PROJECT_ROOT / 'process_mothod'))
 SWINIR_PKG_PATH = os.path.join(PROCESS_METHOD_ROOT, 'SwinIR')
 SRGAN_PKG_PATH = os.path.join(PROCESS_METHOD_ROOT, 'SRGAN')
 
@@ -214,7 +219,15 @@ class SensorDataProcessor:
         
         try:
             if self.processor_type == 'swinir' and self.swinir_processor:
-                processed = [self.swinir_processor.process(img) for img in images]
+                # Prefer true batch processing when possible (same HxW) to reduce overhead.
+                if hasattr(self.swinir_processor, 'process_batch'):
+                    shapes = [getattr(img, 'shape', None) for img in images]
+                    if len(set(shapes)) == 1:
+                        processed = self.swinir_processor.process_batch(images)
+                    else:
+                        processed = [self.swinir_processor.process(img) for img in images]
+                else:
+                    processed = [self.swinir_processor.process(img) for img in images]
             elif self.processor_type == 'srgan' and self.srgan_processor:
                 # SRGAN wrapper does not have batch processing, fallback to loop
                 processed = [self.srgan_processor.process(img) for img in images]

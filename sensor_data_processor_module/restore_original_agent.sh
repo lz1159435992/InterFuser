@@ -3,14 +3,15 @@
 
 set -e
 
-TEAM_CODE_DIR="/home/nju/InterFuser/leaderboard/team_code"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PROJECT_ROOT=${PROJECT_ROOT:-"$(cd "${SCRIPT_DIR}/.." && pwd)"}
+TEAM_CODE_DIR="${PROJECT_ROOT}/leaderboard/team_code"
 BACKUP_DIR=$1
 
 if [ -z "$BACKUP_DIR" ]; then
     echo "用法: $0 <备份目录>"
     echo ""
     echo "查找最近的备份:"
-    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     LATEST_BACKUP=$(ls -dt ${SCRIPT_DIR}/.backup_* 2>/dev/null | head -1)
     if [ -n "$LATEST_BACKUP" ]; then
         echo "  最近备份: $LATEST_BACKUP"

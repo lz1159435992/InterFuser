@@ -26,6 +26,7 @@ import sys
 import carla
 import copy
 import signal
+import time
 
 from srunner.scenariomanager.carla_data_provider import *
 from srunner.scenariomanager.timer import GameTime
@@ -72,6 +73,10 @@ class LeaderboardEvaluator(object):
         Setup ScenarioManager
         """
         self.statistics_manager = statistics_manager
+        self.manager = None
+        self.world = None
+        self.traffic_manager = None
+        self.agent_instance = None
         self.sensors = None
         self.sensor_icons = []
         self._vehicle_lights = carla.VehicleLightState.Position | carla.VehicleLightState.LowBeam
@@ -121,7 +126,10 @@ class LeaderboardEvaluator(object):
         Cleanup and delete actors, ScenarioManager and CARLA world
         """
 
-        self._cleanup()
+        try:
+            self._cleanup()
+        except Exception:
+            pass
         if hasattr(self, 'manager') and self.manager:
             del self.manager
         if hasattr(self, 'world') and self.world:
@@ -140,7 +148,10 @@ class LeaderboardEvaluator(object):
             settings.synchronous_mode = False
             settings.fixed_delta_seconds = None
             self.world.apply_settings(settings)
-            self.traffic_manager.set_synchronous_mode(False)
+            try:
+                self.traffic_manager.set_synchronous_mode(False)
+            except Exception:
+                pass
 
         if self.manager:
             self.manager.cleanup()
@@ -217,8 +228,17 @@ class LeaderboardEvaluator(object):
         CarlaDataProvider.set_traffic_manager_port(int(args.trafficManagerPort))
         CarlaDataProvider.set_random_seed(int(args.carlaProviderSeed))
 
-        self.traffic_manager.set_synchronous_mode(True)
-        self.traffic_manager.set_random_device_seed(int(args.trafficManagerSeed))
+        tm_ready_timeout = float(os.environ.get('CARLA_TM_READY_TIMEOUT', '30'))
+        tm_deadline = time.time() + tm_ready_timeout
+        while True:
+            try:
+                self.traffic_manager.set_synchronous_mode(True)
+                self.traffic_manager.set_random_device_seed(int(args.trafficManagerSeed))
+                break
+            except RuntimeError:
+                if time.time() >= tm_deadline:
+                    raise
+                time.sleep(1.0)
 
         # Wait for the world to be ready
         if CarlaDataProvider.is_sync_mode():
@@ -474,6 +494,7 @@ def main():
     arguments = parser.parse_args()
 
     statistics_manager = StatisticsManager()
+    leaderboard_evaluator = None
 
     try:
         leaderboard_evaluator = LeaderboardEvaluator(arguments, statistics_manager)
@@ -482,7 +503,8 @@ def main():
     except Exception as e:
         traceback.print_exc()
     finally:
-        del leaderboard_evaluator
+        if leaderboard_evaluator is not None:
+            del leaderboard_evaluator
 
 
 if __name__ == '__main__':

@@ -19,7 +19,7 @@ echo ""
 # ============================================================
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="/home/nju/InterFuser"
+PROJECT_ROOT=${PROJECT_ROOT:-"$(cd "${SCRIPT_DIR}/.." && pwd)"}
 TEAM_CODE_DIR="${PROJECT_ROOT}/leaderboard/team_code"
 BACKUP_DIR="${SCRIPT_DIR}/.backup_$(date +%Y%m%d_%H%M%S)"
 
@@ -28,9 +28,17 @@ EVAL_TYPE=${1:-town05}
 GPU_ID=${GPU_ID:-0}
 CONFIG_TYPE=${2:-no_processing}  # 配置类型: no_processing, denoise15, denoise25, denoise50, sr2x, sr4x, jpeg_repair, srgan_2x, srgan_enhance, srgan_4x, custom
 
+DEFAULT_VISIBLE_DEVICES=${CUDA_VISIBLE_DEVICES:-${GPU_ID}}
+CARLA_CUDA_VISIBLE_DEVICES=${CARLA_CUDA_VISIBLE_DEVICES:-${DEFAULT_VISIBLE_DEVICES}}
+PY_CUDA_VISIBLE_DEVICES=${PY_CUDA_VISIBLE_DEVICES:-${DEFAULT_VISIBLE_DEVICES}}
+DATA_PROCESSOR_GPU_ID=${DATA_PROCESSOR_GPU_ID:-0}
+
 echo "📋 评估配置:"
 echo "  - 评估类型: $EVAL_TYPE"
 echo "  - GPU ID: $GPU_ID"
+echo "  - CARLA GPUs: ${CARLA_CUDA_VISIBLE_DEVICES}"
+echo "  - Python GPUs: ${PY_CUDA_VISIBLE_DEVICES}"
+echo "  - Data Processor GPU ID: ${DATA_PROCESSOR_GPU_ID}"
 echo "  - 数据处理配置: $CONFIG_TYPE"
 echo "  - 项目根目录: $PROJECT_ROOT"
 echo ""
@@ -173,30 +181,129 @@ echo "⚙️  步骤 3/5: 设置环境变量"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
 # 激活 conda 环境
-source /home/nju/anaconda2/etc/profile.d/conda.sh
-conda activate interfuser
-echo "  ✓ 激活 conda 环境: interfuser"
+CONDA_ENV_NAME=${CONDA_ENV_NAME:-interfuser}
+if [ -f "/home/nju/anaconda2/etc/profile.d/conda.sh" ]; then
+    source /home/nju/anaconda2/etc/profile.d/conda.sh >/dev/null 2>&1 || true
+    if conda activate "${CONDA_ENV_NAME}" >/dev/null 2>&1; then
+        echo "  ✓ 激活 conda 环境: ${CONDA_ENV_NAME}"
+    else
+        echo "  ⚠️  conda 环境不存在: ${CONDA_ENV_NAME}，继续使用当前环境"
+    fi
+elif command -v conda >/dev/null 2>&1; then
+    CONDA_BASE=$(conda info --base 2>/dev/null)
+    if [ -n "${CONDA_BASE}" ] && [ -f "${CONDA_BASE}/etc/profile.d/conda.sh" ]; then
+        source "${CONDA_BASE}/etc/profile.d/conda.sh" >/dev/null 2>&1 || true
+        if conda activate "${CONDA_ENV_NAME}" >/dev/null 2>&1; then
+            echo "  ✓ 激活 conda 环境: ${CONDA_ENV_NAME}"
+        else
+            echo "  ⚠️  conda 环境不存在: ${CONDA_ENV_NAME}，继续使用当前环境"
+        fi
+    else
+        echo "  ⚠️  conda.sh 不存在，跳过 conda 激活"
+    fi
+else
+    echo "  ⚠️  conda 不存在，跳过 conda 激活"
+fi
 
 # 切换到项目根目录
 cd "${PROJECT_ROOT}"
 
 # 设置基本环境变量
-export CUDA_VISIBLE_DEVICES=${GPU_ID}
+export CARLA_CUDA_VISIBLE_DEVICES=${CARLA_CUDA_VISIBLE_DEVICES}
+export PY_CUDA_VISIBLE_DEVICES=${PY_CUDA_VISIBLE_DEVICES}
+export CUDA_VISIBLE_DEVICES=${PY_CUDA_VISIBLE_DEVICES}
+export DATA_PROCESSOR_GPU_ID=${DATA_PROCESSOR_GPU_ID}
+export PROCESS_METHOD_ROOT=${PROCESS_METHOD_ROOT:-"${PROJECT_ROOT}/process_mothod"}
 export CARLA_ROOT=${PROJECT_ROOT}/carla
 export CARLA_SERVER=${CARLA_ROOT}/CarlaUE4.sh
+export SDL_AUDIODRIVER=${SDL_AUDIODRIVER:-dummy}
+if [ -z "${SDL_VIDEODRIVER:-}" ]; then
+    if [ -n "${DISPLAY:-}" ]; then
+        export SDL_VIDEODRIVER=x11
+    else
+        export SDL_VIDEODRIVER=dummy
+    fi
+fi
+PYTHON_BIN=${PYTHON_BIN:-python3}
+if ! command -v "${PYTHON_BIN}" >/dev/null 2>&1; then
+    PYTHON_BIN=python3
+fi
+PY_VER=$(${PYTHON_BIN} -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')" 2>/dev/null)
+
+CARLA_EGG=""
+if [ "${PY_VER}" = "3.7" ]; then
+    CARLA_EGG="${CARLA_ROOT}/PythonAPI/carla/dist/carla-0.9.10-py3.7-linux-x86_64.egg"
+elif [ "${PY_VER}" = "2.7" ]; then
+    CARLA_EGG="${CARLA_ROOT}/PythonAPI/carla/dist/carla-0.9.10-py2.7-linux-x86_64.egg"
+fi
+
+if [ -z "${CARLA_EGG}" ] || [ ! -f "${CARLA_EGG}" ]; then
+    echo "Error: CARLA PythonAPI egg not available for python ${PY_VER}." >&2
+    echo "Expected one of: py3.7 or py2.7 under ${CARLA_ROOT}/PythonAPI/carla/dist" >&2
+    echo "Tip: create/activate a Python 3.7 environment, then re-run with CONDA_ENV_NAME=<env> or PYTHON_BIN=<python3.7>." >&2
+    exit 1
+fi
+
 export PYTHONPATH=$PYTHONPATH:${CARLA_ROOT}/PythonAPI
 export PYTHONPATH=$PYTHONPATH:${CARLA_ROOT}/PythonAPI/carla
-export PYTHONPATH=$PYTHONPATH:${CARLA_ROOT}/PythonAPI/carla/dist/carla-0.9.10-py3.7-linux-x86_64.egg
+export PYTHONPATH=$PYTHONPATH:${CARLA_EGG}
 export PYTHONPATH=$PYTHONPATH:leaderboard
 export PYTHONPATH=$PYTHONPATH:leaderboard/team_code
 export PYTHONPATH=$PYTHONPATH:scenario_runner
-
+ 
 export LEADERBOARD_ROOT=leaderboard
 export CHALLENGE_TRACK_CODENAME=SENSORS
-export PORT=2000
-export TM_PORT=2500
+export PORT=${PORT:-2000}
+TM_PORT=${TM_PORT:-$((PORT+500))}
+ 
+set +e
+TM_PORT_CANDIDATE=$(${PYTHON_BIN} - <<PY 2>/dev/null
+import socket
+import sys
+
+start = int(${TM_PORT})
+end = start + 50
+
+for p in range(start, end + 1):
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        s.bind(('0.0.0.0', p))
+    except OSError:
+        s.close()
+        continue
+    s.close()
+    print(p)
+    sys.exit(0)
+
+sys.exit(1)
+PY
+)
+TM_PORT_CANDIDATE_EXIT_CODE=$?
+set -e
+ 
+if [ "${TM_PORT_CANDIDATE_EXIT_CODE}" -eq 0 ] && [ -n "${TM_PORT_CANDIDATE}" ]; then
+     TM_PORT=${TM_PORT_CANDIDATE}
+else
+     set +e
+     TM_PORT_FALLBACK=$(${PYTHON_BIN} - <<PY 2>/dev/null
+import socket
+s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+s.bind(('0.0.0.0', 0))
+print(s.getsockname()[1])
+s.close()
+PY
+)
+     set -e
+     if [ -n "${TM_PORT_FALLBACK}" ]; then
+         TM_PORT=${TM_PORT_FALLBACK}
+     fi
+fi
+export TM_PORT=${TM_PORT}
 export DEBUG_CHALLENGE=0
 export REPETITIONS=1
+EVAL_TIMEOUT=${EVAL_TIMEOUT:-600}
+export CARLA_TICK_TIMEOUT=${CARLA_TICK_TIMEOUT:-${EVAL_TIMEOUT}}
+export CARLA_TM_READY_TIMEOUT=${CARLA_TM_READY_TIMEOUT:-60}
 
 # 根据评估类型设置路线和结果路径
 case $EVAL_TYPE in
@@ -242,9 +349,14 @@ case $EVAL_TYPE in
 esac
 
 # 设置结果保存路径（带时间戳和配置标识）
+# 若外部已指定 SAVE_PATH/CHECKPOINT_ENDPOINT（用于断点续跑），则沿用。
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
-export CHECKPOINT_ENDPOINT="results/with_processor/${RESULT_BASE}_${TIMESTAMP}.json"
-export SAVE_PATH="data/eval_with_processor/${RESULT_BASE}_${TIMESTAMP}"
+if [ -z "${SAVE_PATH:-}" ]; then
+    export SAVE_PATH="data/eval_with_processor/${RESULT_BASE}_${TIMESTAMP}"
+fi
+if [ -z "${CHECKPOINT_ENDPOINT:-}" ]; then
+    export CHECKPOINT_ENDPOINT="results/with_processor/${RESULT_BASE}_${TIMESTAMP}.json"
+fi
 EVAL_LOG="${SAVE_PATH}/leaderboard_evaluator.log"
 
 export TEAM_AGENT=leaderboard/team_code/interfuser_agent.py
@@ -266,16 +378,34 @@ echo "━━━━━━━━━━━━━━━━━━━━━━━━�
 echo "🔍 步骤 4/5: 检查 CARLA 服务器"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-timeout 5 bash -c "echo > /dev/tcp/localhost/2000" 2>/dev/null
-if [ $? -eq 0 ]; then
-    echo "  ✓ CARLA 服务器已连接 (端口 2000)"
+CARLA_READY_TIMEOUT=${CARLA_READY_TIMEOUT:-60}
+echo "  → 等待 CARLA ready (timeout: ${CARLA_READY_TIMEOUT}s)"
+READY=0
+END_TS=$(( $(date +%s) + CARLA_READY_TIMEOUT ))
+while [ "$(date +%s)" -lt "${END_TS}" ]; do
+    if ${PYTHON_BIN} - <<PY >/dev/null 2>&1
+import carla
+client = carla.Client('localhost', int('${PORT}'))
+client.set_timeout(30.0)
+client.get_world()
+print('ok')
+PY
+    then
+        READY=1
+        break
+    fi
+    sleep 2
+done
+
+if [ "${READY}" = "1" ]; then
+    echo "  ✓ CARLA 服务器已连接 (端口 ${PORT})"
     echo ""
 else
-    echo "  ✗ 警告: 无法连接到 CARLA 服务器 (端口 2000)"
+    echo "  ✗ 警告: CARLA 服务器不可用或无响应 (端口 ${PORT})"
     echo ""
     echo "请在另一个终端运行以下命令启动 CARLA 服务器:"
-    echo "  cd /home/nju/InterFuser/evaluation_scripts"
-    echo "  ./start_carla_server.sh"
+    echo "  cd ${PROJECT_ROOT}/evaluation_scripts"
+    echo "  CUDA_VISIBLE_DEVICES=${CARLA_CUDA_VISIBLE_DEVICES} ./start_carla_server.sh"
     echo ""
     read -p "是否继续? (y/N) " -n 1 -r
     echo
@@ -297,7 +427,10 @@ echo "🚀 步骤 5/5: 运行评估"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 echo "评估配置摘要:"
-echo "  • GPU: $CUDA_VISIBLE_DEVICES"
+echo "  • CARLA GPUs: ${CARLA_CUDA_VISIBLE_DEVICES}"
+echo "  • Python GPUs: ${PY_CUDA_VISIBLE_DEVICES}"
+echo "  • Data Processor GPU ID: ${DATA_PROCESSOR_GPU_ID}"
+echo "  • Traffic Manager Port: ${TM_PORT}"
 echo "  • 路线: $ROUTES"
 echo "  • 场景: $SCENARIOS"
 echo "  • 数据处理: ${CONFIG_TYPE}"
@@ -325,7 +458,7 @@ EOF
 
 # 运行评估（捕获退出码）
 set +e
-python3 ${LEADERBOARD_ROOT}/leaderboard/leaderboard_evaluator.py \
+PYTHONUNBUFFERED=1 ${PYTHON_BIN} -u ${LEADERBOARD_ROOT}/leaderboard/leaderboard_evaluator.py \
     --scenarios=${SCENARIOS}  \
     --routes=${ROUTES} \
     --repetitions=${REPETITIONS} \
@@ -335,6 +468,7 @@ python3 ${LEADERBOARD_ROOT}/leaderboard/leaderboard_evaluator.py \
     --agent-config=${TEAM_CONFIG} \
     --debug=${DEBUG_CHALLENGE} \
     --resume=${RESUME} \
+    --timeout=${EVAL_TIMEOUT} \
     --port=${PORT} \
     --trafficManagerPort=${TM_PORT} \
     2>&1 | tee "${EVAL_LOG}"
@@ -375,7 +509,7 @@ echo "  • 评估数据: ${SAVE_PATH}"
 echo "  • 元数据: ${SAVE_PATH}/evaluation_metadata.json"
 echo ""
 echo "📖 查看结果:"
-echo "  bash /home/nju/InterFuser/evaluation_scripts/view_results.sh ${CHECKPOINT_ENDPOINT}"
+echo "  bash ${PROJECT_ROOT}/evaluation_scripts/view_results.sh ${CHECKPOINT_ENDPOINT}"
 echo ""
 echo "🔧 备份位置: ${BACKUP_DIR}"
 echo ""

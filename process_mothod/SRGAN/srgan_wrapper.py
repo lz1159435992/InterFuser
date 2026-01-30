@@ -25,8 +25,13 @@ CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 if CURRENT_DIR not in sys.path:
     sys.path.insert(0, CURRENT_DIR)
 
-from .models import Generator
-from .utils import convert_image
+try:
+    from .models import Generator
+    from .utils import convert_image
+except ImportError:
+    # 允许直接 `python srgan_wrapper.py` 或脚本方式导入
+    from models import Generator
+    from utils import convert_image
 
 
 class SRGANProcessor:

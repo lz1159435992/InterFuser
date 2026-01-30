@@ -30,8 +30,6 @@ dependencies:
     - backcall==0.1.0
     - bleach==3.1.4
     - cachetools==4.0.0
-    - carla==0.9.10
-    - carla-birdeye-view==1.1.1
     - certifi==2018.8.24
     - chardet==3.0.4
     - click==7.1.1
@@ -132,7 +130,6 @@ dependencies:
     - tensorboardx==2.6
     - terminado==0.8.3
     - testpath==0.4.4
-    - timm==0.4.13
     - torch==1.13.1
     - torchvision==0.14.1
     - tornado==6.0.4
