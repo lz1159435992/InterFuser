@@ -1,0 +1,16 @@
+profiles:
+  original:
+    entry: experiments/kitti/rq1_scripts_original/calculate_rq1_table_from_csv.py
+    notes: lightweight table generation from existing csv/tex artifacts
+
+  upstream_host172_cpu:
+    entry: experiments/kitti/upstream_hosts/host172/tools_py/run_kitti_eval.py
+    args_template:
+      kitti_root: /path/to/KITTI
+      sources: combo,objects
+
+  upstream_host172_gpu:
+    entry: experiments/kitti/upstream_hosts/host172/tools_py/run_kitti_eval_gpu.py
+    args_template:
+      kitti_root: /path/to/KITTI
+      sources: combo,objects

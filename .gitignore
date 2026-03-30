@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+
+# Logs and temp
+*.log
+tmp/
+temp/
+
+# Environment
+.venv/
+venv/
+
+# Data and checkpoints (keep via README only)
+datasets/
+checkpoints/
+
+# Results policy:
+# - keep curated outputs in results/processed, results/tables, results/figures
+# - raw host dumps can be large; track only selected files
+results/raw/*
+!results/raw/.gitkeep
+
+# LaTeX build artifacts
+paper/tex/*.aux
+paper/tex/*.bbl
+paper/tex/*.blg
+paper/tex/*.fdb_latexmk
+paper/tex/*.fls
+paper/tex/*.out
+paper/tex/*.synctex.gz
+paper/tex/*.toc
+paper/tex/*.pdf

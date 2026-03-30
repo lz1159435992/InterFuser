@@ -1,0 +1,18 @@
+cff-version: 1.2.0
+title: IntuitionTester
+message: If you use this artifact, please cite the associated paper.
+type: software
+authors:
+  - family-names: Li
+    given-names: Zheng
+repository-code: https://github.com/lz1159435992/IntuitionTester.git
+abstract: >
+  IntuitionTester is an artifact companion for evaluating intuitive consistency
+  of autonomous driving systems under beneficial camera sensor upgrades.
+keywords:
+  - autonomous driving
+  - metamorphic testing
+  - software testing
+  - CARLA
+  - KITTI
+  - Udacity CH2

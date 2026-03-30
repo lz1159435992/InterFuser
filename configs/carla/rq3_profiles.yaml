@@ -1,0 +1,16 @@
+profiles:
+  original:
+    entry: experiments/carla/rq3_scripts_original/extract_rq3_tables.py
+    notes: table extraction from output-structured CARLA json artifacts
+
+  upstream_host210_native:
+    entry: experiments/carla/upstream_hosts/host210/carla_native_enhancement/run_evaluation_native.sh
+    args_template:
+      eval_type: town05
+      native_enhance: high_fps
+
+  upstream_host210_summary:
+    entry: scripts/merge/extract_rq3_native_json_to_csv.py
+    args_template:
+      input_dir: experiments/carla/upstream_hosts/host210/results_native
+      output_csv: results/raw/rq3/native_summary.csv

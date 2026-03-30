@@ -1,0 +1,12 @@
+{
+    "timestamp": "20260204_182243",
+    "eval_type": "town05",
+    "native_enhance": "high_fps",
+    "frame_rate": 40,
+    "port": "37095",
+    "traffic_manager_port": "37595",
+    "routes": "leaderboard/data/evaluation_routes/routes_town05_long.xml",
+    "scenarios": "leaderboard/data/scenarios/town05_all_scenarios.json",
+    "checkpoint": "results/native/town05_high_fps_20260204_182243.json",
+    "agent": "interfuser_agent_native.py"
+}
