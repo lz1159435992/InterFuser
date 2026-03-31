@@ -4,8 +4,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 
-KITTI_GEN="${ROOT_DIR}/experiments/kitti/upstream_hosts/host172/tools_py/gen_kitti_combo_dataset.py"
-CH2_GEN="${ROOT_DIR}/experiments/udacity/upstream_hosts/host172/tools/gen_combo_dataset.py"
+KITTI_GEN="${ROOT_DIR}/experiments/kitti/pipeline/tools_py/gen_kitti_combo_dataset.py"
+CH2_GEN="${ROOT_DIR}/experiments/udacity/pipeline/udacity/tools/gen_combo_dataset.py"
 
 usage() {
   cat <<'EOF'
@@ -19,7 +19,7 @@ Options:
   --kitti-pipelines <spec>   all or comma list (default: all)
   --ch2-pipelines <spec>     all or comma list (default: all)
   --segments <list>          CH2 segments list (default: 1,2,3,4,5,6)
-  --process-method-root <p>  process_mothod root (default: <repo>/third_party/process_mothod)
+  --process-method-root <p>  process_methods root (default: <repo>/third_party/process_methods)
   --force                    Regenerate existing outputs
   --dry-run                  Print commands only
   --help                     Show this help
@@ -27,7 +27,7 @@ Options:
 Examples:
   bash scripts/data/prepare_augmented_inputs.sh --task kitti
   bash scripts/data/prepare_augmented_inputs.sh --task ch2 --segments 1,2,3
-  bash scripts/data/prepare_augmented_inputs.sh --task all --process-method-root ./third_party/process_mothod
+  bash scripts/data/prepare_augmented_inputs.sh --task all --process-method-root ./third_party/process_methods
 EOF
 }
 
@@ -37,7 +37,7 @@ CH2_ROOT="${ROOT_DIR}/data/ch2"
 KITTI_PIPELINES="all"
 CH2_PIPELINES="all"
 SEGMENTS="1,2,3,4,5,6"
-PROCESS_METHOD_ROOT="${ROOT_DIR}/third_party/process_mothod"
+PROCESS_METHOD_ROOT="${ROOT_DIR}/third_party/process_methods"
 FORCE="0"
 DRY_RUN="0"
 
@@ -91,6 +91,10 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
+if [ ! -d "${PROCESS_METHOD_ROOT}" ] && [ -d "${ROOT_DIR}/third_party/process_mothod" ]; then
+  PROCESS_METHOD_ROOT="${ROOT_DIR}/third_party/process_mothod"
+fi
+
 if [ "${TASK}" != "all" ] && [ "${TASK}" != "kitti" ] && [ "${TASK}" != "ch2" ]; then
   echo "Invalid --task: ${TASK}" >&2
   exit 1
@@ -119,7 +123,7 @@ run_kitti() {
       exit 2
     fi
     if [ ! -d "${PROCESS_METHOD_ROOT}" ]; then
-      echo "Missing process_mothod root: ${PROCESS_METHOD_ROOT}" >&2
+      echo "Missing process method root: ${PROCESS_METHOD_ROOT}" >&2
       exit 2
     fi
   fi
@@ -152,7 +156,7 @@ run_ch2() {
       exit 2
     fi
     if [ ! -d "${PROCESS_METHOD_ROOT}" ]; then
-      echo "Missing process_mothod root: ${PROCESS_METHOD_ROOT}" >&2
+      echo "Missing process method root: ${PROCESS_METHOD_ROOT}" >&2
       exit 2
     fi
   fi

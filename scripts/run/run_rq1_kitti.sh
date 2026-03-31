@@ -4,7 +4,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 ORIG_DIR="${ROOT_DIR}/experiments/kitti/rq1_scripts_original"
-UPSTREAM_DIR="${ROOT_DIR}/experiments/kitti/upstream_hosts/host172/tools_py"
+PIPELINE_DIR="${ROOT_DIR}/experiments/kitti/pipeline/tools_py"
 
 usage() {
   cat <<'EOF'
@@ -15,8 +15,8 @@ Profiles:
   original               Use original lightweight table script (default).
   paper-kitti-main       Main paper profile for KITTI rerun (recommended).
   paper-kitti-gpu        GPU-accelerated KITTI quality profile.
-  upstream-host172-cpu   Backward-compatible alias of paper-kitti-main.
-  upstream-host172-gpu   Backward-compatible alias of paper-kitti-gpu.
+  legacy-kitti-main      Backward-compatible alias of paper-kitti-main.
+  legacy-kitti-gpu       Backward-compatible alias of paper-kitti-gpu.
 
 Examples:
   bash scripts/run/run_rq1_kitti.sh
@@ -88,15 +88,15 @@ flag_value() {
 if [ "${PROFILE}" = "original" ]; then
   TARGET="${ORIG_DIR}/calculate_rq1_table_from_csv.py"
   CMD=(python "${TARGET}" "${EXTRA_ARGS[@]}")
-elif [ "${PROFILE}" = "paper-kitti-main" ] || [ "${PROFILE}" = "upstream-host172-cpu" ]; then
-  TARGET="${UPSTREAM_DIR}/run_kitti_eval.py"
+elif [ "${PROFILE}" = "paper-kitti-main" ] || [ "${PROFILE}" = "legacy-kitti-main" ]; then
+  TARGET="${PIPELINE_DIR}/run_kitti_eval.py"
   if has_flag "--kitti-root"; then
     KROOT="$(flag_value --kitti-root || true)"
   else
     KROOT="${ROOT_DIR}/data/kitti"
   fi
   if [ "${DRY_RUN}" != "1" ] && [ ! -d "${KROOT}" ]; then
-    echo "RQ1 upstream profile requires KITTI path. Pass: -- --kitti-root /your/KITTI/root" >&2
+    echo "RQ1 paper profile requires KITTI path. Pass: -- --kitti-root /your/KITTI/root" >&2
     exit 2
   fi
   if ! has_flag "--kitti-root"; then
@@ -138,7 +138,7 @@ elif [ "${PROFILE}" = "paper-kitti-main" ] || [ "${PROFILE}" = "upstream-host172
     if has_flag "--did-m3d-root"; then
       DROOT="$(flag_value --did-m3d-root || true)"
     else
-      DROOT="${ROOT_DIR}/data/did_m3d"
+      DROOT="${ROOT_DIR}/experiments/kitti/support_files/did_m3d"
     fi
     if [ ! -d "${VROOT}" ]; then
       echo "RQ1 full-run requires VirConv root. Pass: -- --virconv-root /path/to/VirConv" >&2
@@ -148,23 +148,36 @@ elif [ "${PROFILE}" = "paper-kitti-main" ] || [ "${PROFILE}" = "upstream-host172
       echo "RQ1 full-run requires DID-M3D root. Pass: -- --did-m3d-root /path/to/did_m3d" >&2
       exit 2
     fi
+    if has_flag "--kitti-native-eval-bin"; then
+      KBIN="$(flag_value --kitti-native-eval-bin || true)"
+    else
+      KBIN="${ROOT_DIR}/experiments/kitti/support_files/kitti_native_evaluation/evaluate_object_3d_offline"
+    fi
+    if [ ! -f "${KBIN}" ]; then
+      echo "RQ1 full-run requires KITTI native eval binary: ${KBIN}" >&2
+      echo "Build it first: make -C ${ROOT_DIR}/experiments/kitti/support_files/kitti_native_evaluation" >&2
+      exit 2
+    fi
   fi
   if ! has_flag "--virconv-root"; then
     EXTRA_ARGS+=(--virconv-root "${ROOT_DIR}/data/virconv")
   fi
   if ! has_flag "--did-m3d-root"; then
-    EXTRA_ARGS+=(--did-m3d-root "${ROOT_DIR}/data/did_m3d")
+    EXTRA_ARGS+=(--did-m3d-root "${ROOT_DIR}/experiments/kitti/support_files/did_m3d")
+  fi
+  if ! has_flag "--kitti-native-eval-bin"; then
+    EXTRA_ARGS+=(--kitti-native-eval-bin "${ROOT_DIR}/experiments/kitti/support_files/kitti_native_evaluation/evaluate_object_3d_offline")
   fi
   CMD=(python "${TARGET}" "${EXTRA_ARGS[@]}")
-elif [ "${PROFILE}" = "paper-kitti-gpu" ] || [ "${PROFILE}" = "upstream-host172-gpu" ]; then
-  TARGET="${UPSTREAM_DIR}/run_kitti_eval_gpu.py"
+elif [ "${PROFILE}" = "paper-kitti-gpu" ] || [ "${PROFILE}" = "legacy-kitti-gpu" ]; then
+  TARGET="${PIPELINE_DIR}/run_kitti_eval_gpu.py"
   if has_flag "--kitti-root"; then
     KROOT="$(flag_value --kitti-root || true)"
   else
     KROOT="${ROOT_DIR}/data/kitti"
   fi
   if [ "${DRY_RUN}" != "1" ] && [ ! -d "${KROOT}" ]; then
-    echo "RQ1 upstream GPU profile requires KITTI path. Pass: -- --kitti-root /your/KITTI/root" >&2
+    echo "RQ1 paper GPU profile requires KITTI path. Pass: -- --kitti-root /your/KITTI/root" >&2
     exit 2
   fi
   if ! has_flag "--kitti-root"; then

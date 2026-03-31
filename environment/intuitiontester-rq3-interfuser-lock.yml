@@ -1,0 +1,9 @@
+name: intuitiontester-rq3-interfuser-lock
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.7.12
+  - pip
+  - pip:
+      - -r ./intuitiontester-rq3-interfuser-lock-requirements.txt

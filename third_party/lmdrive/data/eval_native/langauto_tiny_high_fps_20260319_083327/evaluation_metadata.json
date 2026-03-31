@@ -1,0 +1,11 @@
+{
+  "timestamp": "20260319_083327",
+  "eval_type": "langauto_tiny",
+  "native_enhance": "high_fps",
+  "port": "16561",
+  "traffic_manager_port": "17061",
+  "routes": "langauto/benchmark_tiny.xml",
+  "scenarios": "leaderboard/data/official/all_towns_traffic_scenarios_public.json",
+  "checkpoint": "results/native/langauto_tiny_high_fps_20260319_083327.json",
+  "agent": "lmdriver_agent_native.py"
+}

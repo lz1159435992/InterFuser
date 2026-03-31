@@ -5,7 +5,7 @@ Use this checklist before publishing a public artifact release.
 ## Attribution
 
 1. Confirm `CITATION.cff` repository URL and metadata.
-2. Confirm third-party attribution notes for files under `experiments/*/upstream_hosts`.
+2. Confirm third-party attribution notes for `experiments/*/pipeline` and `third_party/*`.
 
 ## Reproducibility
 

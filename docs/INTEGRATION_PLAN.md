@@ -32,7 +32,7 @@ Integrate three remote repositories into one paper-ready open-source project wit
 - `experiments/carla`
 2. Normalize command-line arguments and config format under `configs/`.
 3. Move common reusable logic to shared modules (if needed).
-4. Record all source-to-target decisions in `docs/MERGE_MAP.md`.
+4. Record all source-to-target decisions in this plan document.
 
 ## Phase C: Reproducibility Layer
 

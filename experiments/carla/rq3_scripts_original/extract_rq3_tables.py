@@ -21,7 +21,54 @@ SAFETY_KEYS = (
 
 
 def _repo_root() -> Path:
-    return Path(__file__).resolve().parents[2]
+    cur = Path(__file__).resolve()
+    for p in [cur] + list(cur.parents):
+        if (p / "scripts" / "run" / "run_rq3_carla.sh").exists():
+            return p
+    # Fallback for legacy layout.
+    return cur.parents[2]
+
+
+def _first_existing(paths: Iterable[Optional[Path]]) -> Optional[Path]:
+    for p in paths:
+        if p is not None and p.exists():
+            return p
+    return None
+
+
+def _resolve_out_dir(root: Path, user_out_dir: Optional[str]) -> Path:
+    if user_out_dir:
+        return Path(user_out_dir).expanduser().resolve()
+    return _first_existing(
+        [
+            root / "results" / "raw" / "rq3",
+            root / "output",
+        ],
+    ) or (root / "results" / "raw" / "rq3")
+
+
+def _resolve_lmdrive_native_dir(root: Path, out_dir: Path, user_dir: Optional[str]) -> Path:
+    if user_dir:
+        return Path(user_dir).expanduser().resolve()
+    return _first_existing(
+        [
+            out_dir / "lmdrive" / "native_sweep" / "fullcover_native_20260320",
+            root / "third_party" / "lmdrive" / "results" / "native_sweep" / "fullcover_native_20260320",
+            root / "third_party" / "lmdrive" / "data" / "eval_native_sweep" / "fullcover_native_20260320",
+        ],
+    ) or (out_dir / "lmdrive" / "native_sweep" / "fullcover_native_20260320")
+
+
+def _resolve_interfuser_native_dir(root: Path, out_dir: Path, interfuser_dir: Path, user_dir: Optional[str]) -> Path:
+    if user_dir:
+        return Path(user_dir).expanduser().resolve()
+    return _first_existing(
+        [
+            interfuser_dir / "native",
+            out_dir / "native_json",
+            root / "third_party" / "interfuser_project" / "output" / "interfuser" / "native",
+        ],
+    ) or (interfuser_dir / "native")
 
 
 def _load_json(path: Path) -> Dict[str, Any]:
@@ -1062,21 +1109,46 @@ def main(argv: Optional[List[str]] = None) -> int:
         default="all",
         help="Which section to print (default: all).",
     )
+    parser.add_argument(
+        "--out-dir",
+        default=None,
+        help="Base result directory. Default: auto-detect from results/raw/rq3 then output.",
+    )
+    parser.add_argument(
+        "--interfuser-native-dir",
+        default=None,
+        help="Optional override for InterFuser native JSON directory.",
+    )
+    parser.add_argument(
+        "--lmdrive-native-dir",
+        default=None,
+        help="Optional override for LMDrive native sweep JSON directory.",
+    )
 
     args = parser.parse_args(argv)
 
     root = _repo_root()
-    out_dir = root / "output"
+    out_dir = _resolve_out_dir(root, args.out_dir)
 
     interfuser_dir = out_dir / "interfuser"
     interfuser_proc = interfuser_dir / "with_processor"
-    interfuser_native = interfuser_dir / "native"
+    interfuser_native = _resolve_interfuser_native_dir(root, out_dir, interfuser_dir, args.interfuser_native_dir)
 
     lmdrive_proc = out_dir / "lmdrive" / "with_processor"
-    lmdrive_native = out_dir / "lmdrive" / "native_sweep" / "fullcover_native_20260320"
+    lmdrive_native = _resolve_lmdrive_native_dir(root, out_dir, args.lmdrive_native_dir)
 
-    interfuser_town05_orig = interfuser_dir / "interfuser_town05_result.json"
-    interfuser_42_orig = interfuser_dir / "interfuser_42routes_result.json"
+    interfuser_town05_orig = _first_existing(
+        [
+            interfuser_dir / "interfuser_town05_result.json",
+            _find_latest_by_mtime(interfuser_native, "town05_none*.json") if interfuser_native.exists() else None,
+        ],
+    )
+    interfuser_42_orig = _first_existing(
+        [
+            interfuser_dir / "interfuser_42routes_result.json",
+            _find_latest_by_mtime(interfuser_native, "42routes_none*.json") if interfuser_native.exists() else None,
+        ],
+    )
 
     interfuser_town05_sr = _find_latest(interfuser_proc, "town05_srgan_2x_*.json")
     interfuser_42_sr = _find_latest(interfuser_proc, "42routes_srgan_2x_*.json")
@@ -1164,53 +1236,53 @@ def main(argv: Optional[List[str]] = None) -> int:
         print()
 
     if args.section in ("native", "all"):
-        # Native upgrades for Interfuser only (from output/interfuser/native)
+        # Native upgrades for InterFuser and LMDrive (resolved from integrated result layout).
         if not interfuser_native.exists():
             print("# Interfuser native directory not found:", interfuser_native)
-            return 0
-
-        _print_interfuser_native_suite_summary(
-            base_town05=interfuser_town05_orig,
-            base_42=interfuser_42_orig,
-            native_dir=interfuser_native,
-            path_tol=args.path_tol,
-            rc_tol=args.rc_tol,
-            time_tol=args.time_tol,
-            safety_tol=args.safety_tol,
-        )
-        print()
-        _print_interfuser_native_supporting_stats(
-            base_town05=interfuser_town05_orig,
-            base_42=interfuser_42_orig,
-            native_dir=interfuser_native,
-            path_tol=args.path_tol,
-            rc_tol=args.rc_tol,
-            time_tol=args.time_tol,
-            safety_tol=args.safety_tol,
-        )
-        print()
+        elif interfuser_town05_orig is None or interfuser_42_orig is None:
+            print("# Interfuser native baselines not found (town05/42routes none or original JSON missing).")
+        else:
+            _print_interfuser_native_suite_summary(
+                base_town05=interfuser_town05_orig,
+                base_42=interfuser_42_orig,
+                native_dir=interfuser_native,
+                path_tol=args.path_tol,
+                rc_tol=args.rc_tol,
+                time_tol=args.time_tol,
+                safety_tol=args.safety_tol,
+            )
+            print()
+            _print_interfuser_native_supporting_stats(
+                base_town05=interfuser_town05_orig,
+                base_42=interfuser_42_orig,
+                native_dir=interfuser_native,
+                path_tol=args.path_tol,
+                rc_tol=args.rc_tol,
+                time_tol=args.time_tol,
+                safety_tol=args.safety_tol,
+            )
+            print()
 
         if not lmdrive_native.exists():
             print("# LMDrive native directory not found:", lmdrive_native)
-            return 0
+        else:
+            _print_lmdrive_native_supporting_stats(
+                native_dir=lmdrive_native,
+                path_tol=args.path_tol,
+                rc_tol=args.rc_tol,
+                time_tol=args.time_tol,
+                safety_tol=args.safety_tol,
+            )
+            print()
 
-        _print_lmdrive_native_supporting_stats(
-            native_dir=lmdrive_native,
-            path_tol=args.path_tol,
-            rc_tol=args.rc_tol,
-            time_tol=args.time_tol,
-            safety_tol=args.safety_tol,
-        )
-        print()
-
-        _print_lmdrive_native_suite_summary(
-            native_dir=lmdrive_native,
-            path_tol=args.path_tol,
-            rc_tol=args.rc_tol,
-            time_tol=args.time_tol,
-            safety_tol=args.safety_tol,
-        )
-        print()
+            _print_lmdrive_native_suite_summary(
+                native_dir=lmdrive_native,
+                path_tol=args.path_tol,
+                rc_tol=args.rc_tol,
+                time_tol=args.time_tol,
+                safety_tol=args.safety_tol,
+            )
+            print()
 
     return 0
 

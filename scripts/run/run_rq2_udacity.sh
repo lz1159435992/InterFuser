@@ -4,8 +4,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 ORIG_DIR="${ROOT_DIR}/experiments/udacity/rq2_scripts_original"
-UPSTREAM_172_TOOLS="${ROOT_DIR}/experiments/udacity/upstream_hosts/host172/tools"
-UPSTREAM_114_TOOLS="${ROOT_DIR}/experiments/udacity/upstream_hosts/host114/tools"
+PIPELINE_TOOLS="${ROOT_DIR}/experiments/udacity/pipeline/udacity/tools"
 
 usage() {
   cat <<'EOF'
@@ -16,8 +15,8 @@ Profiles:
   original            Use original lightweight violation script (default).
   paper-ch2-main      Main paper profile for CH2 rerun (recommended).
   paper-ch2-variant   Secondary CH2 variant profile.
-  upstream-host172    Backward-compatible alias of paper-ch2-main.
-  upstream-host114    Backward-compatible alias of paper-ch2-variant.
+  legacy-ch2-main     Backward-compatible alias of paper-ch2-main.
+  legacy-ch2-variant  Backward-compatible alias of paper-ch2-variant.
 
 Examples:
   bash scripts/run/run_rq2_udacity.sh
@@ -91,8 +90,8 @@ flag_value() {
 if [ "${PROFILE}" = "original" ]; then
   TARGET="${ORIG_DIR}/calculate_rq2_violations.py"
   CMD=(python "${TARGET}" "${EXTRA_ARGS[@]}")
-elif [ "${PROFILE}" = "paper-ch2-main" ] || [ "${PROFILE}" = "upstream-host172" ]; then
-  TARGET="${UPSTREAM_172_TOOLS}/run_combo_eval.py"
+elif [ "${PROFILE}" = "paper-ch2-main" ] || [ "${PROFILE}" = "legacy-ch2-main" ]; then
+  TARGET="${PIPELINE_TOOLS}/run_combo_eval.py"
   if has_flag "--ch2-root"; then
     CH2_ROOT="$(flag_value --ch2-root || true)"
   else
@@ -104,7 +103,7 @@ elif [ "${PROFILE}" = "paper-ch2-main" ] || [ "${PROFILE}" = "upstream-host172" 
     W_ROOT="${ROOT_DIR}/data/community-models"
   fi
   if [ "${DRY_RUN}" != "1" ] && ( [ ! -d "${CH2_ROOT}" ] || [ ! -d "${W_ROOT}" ] ); then
-    echo "RQ2 upstream profile requires CH2 and weights paths." >&2
+    echo "RQ2 paper profile requires CH2 and weights paths." >&2
     echo "Use: -- --ch2-root /path/to/CH2 --weights-root /path/to/community-models" >&2
     exit 2
   fi
@@ -129,8 +128,8 @@ elif [ "${PROFILE}" = "paper-ch2-main" ] || [ "${PROFILE}" = "upstream-host172" 
     exit 2
   fi
   CMD=(python "${TARGET}" "${EXTRA_ARGS[@]}")
-elif [ "${PROFILE}" = "paper-ch2-variant" ] || [ "${PROFILE}" = "upstream-host114" ]; then
-  TARGET="${UPSTREAM_114_TOOLS}/run_combo_eval.py"
+elif [ "${PROFILE}" = "paper-ch2-variant" ] || [ "${PROFILE}" = "legacy-ch2-variant" ]; then
+  TARGET="${PIPELINE_TOOLS}/run_combo_eval.py"
   if has_flag "--ch2-root"; then
     CH2_ROOT="$(flag_value --ch2-root || true)"
   else
@@ -142,7 +141,7 @@ elif [ "${PROFILE}" = "paper-ch2-variant" ] || [ "${PROFILE}" = "upstream-host11
     W_ROOT="${ROOT_DIR}/data/community-models"
   fi
   if [ "${DRY_RUN}" != "1" ] && ( [ ! -d "${CH2_ROOT}" ] || [ ! -d "${W_ROOT}" ] ); then
-    echo "RQ2 upstream profile requires CH2 and weights paths." >&2
+    echo "RQ2 paper profile requires CH2 and weights paths." >&2
     echo "Use: -- --ch2-root /path/to/CH2 --weights-root /path/to/community-models" >&2
     exit 2
   fi

@@ -1,0 +1,9 @@
+name: intuitiontester-rq3-lmdrive
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.8.13
+  - pip
+  - pip:
+      - -r ./intuitiontester-rq3-lmdrive-lock-requirements.txt

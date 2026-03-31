@@ -4,8 +4,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/../.." && pwd)"
 ORIG_DIR="${ROOT_DIR}/experiments/carla/rq3_scripts_original"
-UPSTREAM_NATIVE_DIR="${ROOT_DIR}/experiments/carla/upstream_hosts/host210/carla_native_enhancement"
-UPSTREAM_RESULTS_DIR="${ROOT_DIR}/experiments/carla/upstream_hosts/host210/results_native"
+PIPELINE_DIR="${ROOT_DIR}/experiments/carla/pipeline"
+RESULTS_DIR="${ROOT_DIR}/results/raw/rq3/native_json"
 SUMMARY_SCRIPT="${ROOT_DIR}/scripts/merge/extract_rq3_native_json_to_csv.py"
 
 usage() {
@@ -15,10 +15,12 @@ Usage:
 
 Profiles:
   original                Use original extract_rq3_tables.py (default).
-  paper-carla-native      Main paper profile for native CARLA rerun (recommended).
+  paper-carla-native      Main paper profile for InterFuser native CARLA rerun.
+  paper-carla-lmdrive-native Run LMDrive native CARLA evaluation.
+  paper-carla-lmdrive-sweep  Run LMDrive native sweep in parallel.
   paper-carla-summary     Summarize integrated results_native/*.json to CSV.
-  upstream-host210-native Backward-compatible alias of paper-carla-native.
-  upstream-host210-summary Backward-compatible alias of paper-carla-summary.
+  legacy-carla-native     Backward-compatible alias of paper-carla-native.
+  legacy-carla-summary    Backward-compatible alias of paper-carla-summary.
 
 Examples:
   bash scripts/run/run_rq3_carla.sh
@@ -60,13 +62,19 @@ done
 if [ "${PROFILE}" = "original" ]; then
   TARGET="${ORIG_DIR}/extract_rq3_tables.py"
   CMD=(python "${TARGET}" "${EXTRA_ARGS[@]}")
-elif [ "${PROFILE}" = "paper-carla-native" ] || [ "${PROFILE}" = "upstream-host210-native" ]; then
-  TARGET="${UPSTREAM_NATIVE_DIR}/run_evaluation_native.sh"
+elif [ "${PROFILE}" = "paper-carla-native" ] || [ "${PROFILE}" = "legacy-carla-native" ]; then
+  TARGET="${PIPELINE_DIR}/run_interfuser_native.sh"
   CMD=(bash "${TARGET}" "${EXTRA_ARGS[@]}")
-elif [ "${PROFILE}" = "paper-carla-summary" ] || [ "${PROFILE}" = "upstream-host210-summary" ]; then
+elif [ "${PROFILE}" = "paper-carla-lmdrive-native" ]; then
+  TARGET="${PIPELINE_DIR}/run_lmdrive_native.sh"
+  CMD=(bash "${TARGET}" "${EXTRA_ARGS[@]}")
+elif [ "${PROFILE}" = "paper-carla-lmdrive-sweep" ]; then
+  TARGET="${PIPELINE_DIR}/run_lmdrive_native_sweep_parallel.sh"
+  CMD=(bash "${TARGET}" "${EXTRA_ARGS[@]}")
+elif [ "${PROFILE}" = "paper-carla-summary" ] || [ "${PROFILE}" = "legacy-carla-summary" ]; then
   TARGET="${SUMMARY_SCRIPT}"
   OUT="${ROOT_DIR}/results/raw/rq3/carla_native_summary.csv"
-  CMD=(python "${TARGET}" --input-dir "${UPSTREAM_RESULTS_DIR}" --output-csv "${OUT}" "${EXTRA_ARGS[@]}")
+  CMD=(python "${TARGET}" --input-dir "${RESULTS_DIR}" --output-csv "${OUT}" "${EXTRA_ARGS[@]}")
 else
   echo "Unknown profile: ${PROFILE}" >&2
   usage >&2

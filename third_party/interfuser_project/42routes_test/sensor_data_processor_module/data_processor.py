@@ -1,0 +1,323 @@
+"""
+传感器数据处理器 - 多模块版�?
+支持多种图像处理方法:
+  �?SwinIR - 基于 Swin Transformer 的图像修复（去噪、超分辨率、JPEG 修复�?  �?SRGAN - 基于 GAN �?4x 超分辨率 / 图像增强
+
+使用方法�?    from data_processor import SensorDataProcessor
+    from data_processor_config import ACTIVE_CONFIG
+    
+    processor = SensorDataProcessor(ACTIVE_CONFIG)
+    processed_rgb = processor.process_rgb(rgb_image)
+"""
+
+import sys
+import os
+import numpy as np
+from pathlib import Path
+import json
+
+# 添加处理模块路径
+PROCESS_METHOD_ROOT = '/path/to/project/process_mothod'
+SWINIR_PKG_PATH = os.path.join(PROCESS_METHOD_ROOT, 'SwinIR')
+SRGAN_PKG_PATH = os.path.join(PROCESS_METHOD_ROOT, 'SRGAN')
+
+if PROCESS_METHOD_ROOT not in sys.path:
+    sys.path.insert(0, PROCESS_METHOD_ROOT)
+
+
+class SensorDataProcessor:
+    """传感器数据处理器 - 支持多种图像处理方法"""
+    
+    def __init__(self, config):
+        """
+        初始化数据处理器
+        
+        Args:
+            config: 配置字典，参�?data_processor_config.py
+        """
+        self.config = config
+        self.enabled = config.get('enabled', True)
+        self.frame_count = 0
+        self.stats = {
+            'total_frames': 0,
+            'rgb_processed': 0,
+            'errors': 0,
+        }
+        
+        # 初始化处理器
+        self.swinir_processor = None
+        self.srgan_processor = None
+        self.processor_type = 'none'
+        
+        if self.enabled:
+            # 检查配置的处理器类�?            processor_type = config.get('processor_type', 'none')
+            
+            # 初始�?SwinIR
+            swinir_config = config.get('swinir', {})
+            if swinir_config.get('enabled', False) or processor_type == 'swinir':
+                self._init_swinir(swinir_config)
+                self.processor_type = 'swinir'
+            
+            # 初始�?SRGAN
+            srgan_config = config.get('srgan', {})
+            if srgan_config.get('enabled', False) or processor_type == 'srgan':
+                self._init_srgan(srgan_config)
+                self.processor_type = 'srgan'
+        
+        # 打印初始化信�?        if self.enabled:
+            print("\n" + "=" * 70)
+            if self.swinir_processor:
+                print("🖼�? SwinIR 数据处理器已初始�?)
+                print("=" * 70)
+                print(f"  任务: {swinir_config.get('task', 'color_dn')}")
+                print(f"  模型: {os.path.basename(swinir_config.get('model_path', 'N/A'))}")
+                if swinir_config.get('task') in ['denoise', 'gray_dn', 'color_dn']:
+                    print(f"  噪声等级: {swinir_config.get('noise', 15)}")
+                if swinir_config.get('task') in ['jpeg', 'jpeg_car', 'color_jpeg_car']:
+                    print(f"  JPEG 质量: {swinir_config.get('jpeg', 40)}")
+            elif self.srgan_processor:
+                print("🖼�? SRGAN 数据处理器已初始�?)
+                print("=" * 70)
+                print(f"  模型: {os.path.basename(srgan_config.get('model_path', 'N/A'))}")
+                output_scale = srgan_config.get('output_scale', 2)
+                if output_scale == 1:
+                    print(f"  模式: 图像增强�?x�?)
+                elif output_scale == 2:
+                    print(f"  模式: 2x 超分辨率（与原始 test.py 一致）�?)
+                elif output_scale == 4:
+                    print(f"  模式: 4x 超分辨率（完整放大）")
+                else:
+                    print(f"  模式: {output_scale}x 超分辨率")
+            else:
+                print("ℹ️   数据处理器已初始化（无处理模式）")
+                print("=" * 70)
+            print("=" * 70 + "\n")
+    
+    def _init_swinir(self, swinir_config):
+        """初始�?SwinIR 处理�?""
+        try:
+            from SwinIR.swinir_wrapper import SwinIRProcessor
+            
+            model_path = swinir_config.get('model_path')
+            if not model_path or not os.path.exists(model_path):
+                print(f"⚠️  SwinIR 模型文件不存�? {model_path}")
+                print("  跳过 SwinIR 初始�?)
+                return
+            
+            self.swinir_processor = SwinIRProcessor(
+                model_path=model_path,
+                task=swinir_config.get('task', 'color_dn'),
+                upscale=swinir_config.get('upscale', 1),
+                device=swinir_config.get('device', 'cuda'),
+                half_precision=swinir_config.get('half_precision', False),
+                noise=swinir_config.get('noise', 15),
+                jpeg=swinir_config.get('jpeg', 40),
+                training_patch_size=swinir_config.get('training_patch_size', 128),
+                tile=swinir_config.get('tile', None),
+                tile_overlap=swinir_config.get('tile_overlap', 32)
+            )
+            
+        except ImportError as e:
+            print(f"⚠️  无法导入 SwinIR: {e}")
+            print(f"  请确�?SwinIR 在路�? {SWINIR_PKG_PATH}")
+            self.swinir_processor = None
+        except Exception as e:
+            print(f"⚠️  SwinIR 初始化失�? {e}")
+            self.swinir_processor = None
+    
+    def _init_srgan(self, srgan_config):
+        """初始�?SRGAN 处理�?""
+        try:
+            from SRGAN.srgan_wrapper import SRGANProcessor
+            
+            model_path = srgan_config.get('model_path')
+            if not model_path or not os.path.exists(model_path):
+                print(f"⚠️  SRGAN 模型文件不存�? {model_path}")
+                print("  跳过 SRGAN 初始�?)
+                return
+            
+            self.srgan_processor = SRGANProcessor(
+                model_path=model_path,
+                device=srgan_config.get('device', 'cuda'),
+                half_precision=srgan_config.get('half_precision', False),
+                output_scale=srgan_config.get('output_scale', 2),  # 默认 2x（与原始 test.py 一致）
+                large_kernel_size=srgan_config.get('large_kernel_size', 9),
+                small_kernel_size=srgan_config.get('small_kernel_size', 3),
+                n_channels=srgan_config.get('n_channels', 64),
+                n_blocks=srgan_config.get('n_blocks', 16),
+                scaling_factor=srgan_config.get('scaling_factor', 4)
+            )
+            
+        except ImportError as e:
+            print(f"⚠️  无法导入 SRGAN: {e}")
+            print(f"  请确�?SRGAN 在路�? {SRGAN_PKG_PATH}")
+            self.srgan_processor = None
+        except Exception as e:
+            print(f"⚠️  SRGAN 初始化失�? {e}")
+            self.srgan_processor = None
+    
+    def process_rgb(self, rgb_image, sensor_id='rgb'):
+        """
+        处理 RGB 图像
+        
+        Args:
+            rgb_image: numpy array, shape (H, W, 3), RGB 格式, 0-255
+            sensor_id: 传感�?ID（未使用，保持接口兼容）
+        
+        Returns:
+            处理后的 RGB 图像，shape (H, W, 3), RGB 格式, 0-255
+        """
+        if not self.enabled:
+            return rgb_image
+        
+        # 根据处理器类型进行处�?        try:
+            if self.processor_type == 'swinir' and self.swinir_processor:
+                processed = self.swinir_processor.process(rgb_image)
+            elif self.processor_type == 'srgan' and self.srgan_processor:
+                processed = self.srgan_processor.process(rgb_image)
+            else:
+                # 无处�?                return rgb_image
+        except RuntimeError as e:
+            # 常见�?CUDA OOM 或算子异常，返回原图以不中断评估
+            print(f"⚠️  图像处理失败 (RuntimeError): {e}. 返回原始图像继续评估�?)
+            self.stats['errors'] += 1
+            return rgb_image
+        except Exception as e:
+            print(f"⚠️  图像处理失败: {e}. 返回原始图像继续评估�?)
+            self.stats['errors'] += 1
+            return rgb_image
+        
+        # 更新统计
+        self.stats['rgb_processed'] += 1
+        
+        return processed
+    
+    def process_rgb_batch(self, images):
+        """
+        批量处理 RGB 图像
+        
+        Args:
+            images: list of numpy arrays, shape (H, W, 3), RGB 格式, 0-255
+        
+        Returns:
+            list of 处理后的 RGB 图像
+        """
+        if not self.enabled or not images:
+            return images
+        
+        try:
+            if self.processor_type == 'swinir' and self.swinir_processor:
+                processed = [self.swinir_processor.process(img) for img in images]
+            elif self.processor_type == 'srgan' and self.srgan_processor:
+                # SRGAN wrapper does not have batch processing, fallback to loop
+                processed = [self.srgan_processor.process(img) for img in images]
+            else:
+                return images
+        except RuntimeError as e:
+            print(f"⚠️  批量图像处理失败 (RuntimeError): {e}. 返回原始图像继续评估�?)
+            self.stats['errors'] += len(images)
+            return images
+        except Exception as e:
+            print(f"⚠️  批量图像处理失败: {e}. 返回原始图像继续评估�?)
+            self.stats['errors'] += len(images)
+            return images
+        
+        self.stats['rgb_processed'] += len(images)
+        return processed
+    
+    def next_frame(self):
+        """更新帧计�?""
+        self.frame_count += 1
+        self.stats['total_frames'] += 1
+    
+    def get_config_summary(self):
+        """获取配置摘要"""
+        summary = {
+            'enabled': self.enabled,
+        }
+        
+        if self.swinir_processor:
+            swinir_stats = self.swinir_processor.get_stats()
+            summary['swinir'] = swinir_stats
+        
+        return summary
+    
+    def print_stats(self):
+        """打印统计信息"""
+        print("\n" + "=" * 70)
+        print("📊 数据处理器统计信�?)
+        print("=" * 70)
+        print(f"  总帧�? {self.stats['total_frames']}")
+        print(f"  RGB 处理: {self.stats['rgb_processed']}")
+        
+        if self.swinir_processor:
+            swinir_stats = self.swinir_processor.get_stats()
+            print(f"\nSwinIR 统计:")
+            print(f"  任务: {swinir_stats['task']}")
+            print(f"  设备: {swinir_stats['device']}")
+            print(f"  处理帧数: {swinir_stats['process_count']}")
+        
+        print("=" * 70 + "\n")
+    
+    def save_stats(self, filepath):
+        """保存统计信息�?JSON 文件"""
+        stats_data = {
+            'stats': self.stats,
+            'config_summary': self.get_config_summary()
+        }
+        
+        with open(filepath, 'w') as f:
+            json.dump(stats_data, f, indent=2)
+        
+        print(f"�?统计信息已保存到: {filepath}")
+
+
+# 为了向后兼容，保留一些空的方�?    def process_lidar(self, lidar_data):
+        """保持接口兼容，直接返回原始数�?""
+        return lidar_data
+    
+    def process_gps(self, gps_data):
+        """保持接口兼容，直接返回原始数�?""
+        return gps_data
+    
+    def process_speed(self, speed):
+        """保持接口兼容，直接返回原始数�?""
+        return speed
+    
+    def process_compass(self, compass):
+        """保持接口兼容，直接返回原始数�?""
+        return compass
+
+
+if __name__ == "__main__":
+    # 简单测�?    print("=" * 70)
+    print("🧪 测试 SensorDataProcessor")
+    print("=" * 70)
+    
+    # 创建测试配置
+    test_config = {
+        'enabled': True,
+        'swinir': {
+            'enabled': False,  # 默认关闭，因为需要模型文�?            'model_path': '/path/to/project/process_mothod/SwinIR/model_zoo/swinir/005_colorDN_DFWB_s128w8_SwinIR-M_noise15.pth',
+            'task': 'color_dn',
+            'noise': 15,
+        }
+    }
+    
+    processor = SensorDataProcessor(test_config)
+    
+    # 创建测试图像
+    test_image = np.random.randint(0, 256, (100, 100, 3), dtype=np.uint8)
+    print(f"\n输入图像形状: {test_image.shape}")
+    
+    # 处理
+    output = processor.process_rgb(test_image)
+    print(f"输出图像形状: {output.shape}")
+    
+    # 打印统计
+    processor.next_frame()
+    processor.print_stats()
+    
+    print("\n" + "=" * 70)
+    print("�?测试完成")
+    print("=" * 70)

@@ -1,0 +1,11 @@
+{
+  "timestamp": "20260323_175643",
+  "eval_type": "langauto_long",
+  "native_enhance": "high_fps,high_res",
+  "port": "2212",
+  "traffic_manager_port": "2712",
+  "routes": "langauto/benchmark_long.xml",
+  "scenarios": "leaderboard/data/official/all_towns_traffic_scenarios_public.json",
+  "checkpoint": "/path/to/project/LMDrive/results/native_sweep/fullcover_native_20260320/langauto_long_high_fps_high_res.json",
+  "agent": "lmdriver_agent_native.py"
+}

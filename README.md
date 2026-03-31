@@ -15,18 +15,21 @@ It is organized around the three research questions in the paper:
 ```text
 IntuitionTester/
   experiments/
+    common/
+      image_quality_validation/  # Appendix image-quality validation scripts
     kitti/                   # RQ1 scripts and adapters
     udacity/                 # RQ2 scripts and adapters
     carla/                   # RQ3 scripts and adapters
+    .../pipeline/*                  # Self-contained runnable experiment code
   configs/
     kitti/
     udacity/
     carla/
   scripts/
-    ingest/                  # Pull/record from remote hosts
+    ingest/                  # Sync from local mirrors
     data/                    # Dataset enhancement/combo preparation
     run/                     # Unified reproduction entry points
-    merge/                   # Cross-host result merging
+    merge/                   # Cross-run result merging
     plot/                    # Figure/table generation helpers
   results/
     raw/                     # Immutable per-run outputs
@@ -36,11 +39,15 @@ IntuitionTester/
   provenance/                # Commit/env/hardware metadata per run
   docs/
     INTEGRATION_PLAN.md
-    MERGE_MAP.md
     EXPERIMENT_MATRIX.md
   environment/
-    environment.yml
-    requirements.txt
+    intuitiontester-rq1-quality.yml
+    intuitiontester-rq1-3d-eval.yml
+    intuitiontester-rq3-interfuser.yml
+    intuitiontester-rq3-lmdrive.yml
+  third_party/
+    interfuser_project/     # Full InterFuser code mirror (code-only)
+    lmdrive/                # Full LMDrive code mirror (code-only)
 ```
 
 ## Open-Source Essentials
@@ -51,21 +58,113 @@ IntuitionTester/
 
 ## Source Mirrors (Read-only)
 
-Raw remote snapshots are kept outside this repo under:
+Raw source snapshots are kept outside this repo under:
 
 `../IntuitionTester_sources`
 
-Do not directly edit mirrored files. Integrate by copying/selecting into this repository and recording decisions in `docs/MERGE_MAP.md`.
+Do not directly edit mirrored files. Integrate by copying/selecting into this repository and documenting decisions in `docs/INTEGRATION_PLAN.md`.
+
+## Full Code Sync
+
+To sync complete InterFuser/LMDrive code from local mirrors:
+
+```bash
+bash scripts/ingest/sync_open_source_from_local.sh
+```
+
+Default local source root:
+
+- `../IntuitionTester_sources/carla_source_mirror/`
+
+Synced folders:
+
+- `third_party/interfuser_project/`
+- `third_party/lmdrive/`
+- `experiments/carla/pipeline/` (thin wrappers for unified RQ3 entry)
+
+Override mirror root if needed:
+
+```bash
+INTUITION_TESTER_SOURCES=/abs/path/to/IntuitionTester_sources \
+bash scripts/ingest/sync_open_source_from_local.sh
+```
+
+To sync KITTI/Udacity generation/evaluation scripts and appendix image-quality scripts:
+
+```bash
+INTUITION_TESTER_SOURCES=/abs/path/to/IntuitionTester_sources \
+bash scripts/ingest/sync_kitti_udacity_from_local.sh
+```
+
+## Reproduction Environments
+
+Project environments (out-of-box):
+
+- `environment/intuitiontester-rq1-quality.yml`
+- `environment/intuitiontester-rq1-3d-eval.yml`
+- `environment/intuitiontester-rq2-orchestrator.yml`
+- `environment/intuitiontester-rq3-interfuser.yml`
+- `environment/intuitiontester-rq3-lmdrive.yml`
+
+Lock files (for strict reproducibility):
+
+- `environment/intuitiontester-rq3-interfuser-lock.yml`
+- `environment/intuitiontester-rq3-lmdrive-lock.yml`
+- `environment/intuitiontester-rq3-interfuser-lock-requirements.txt`
+- `environment/intuitiontester-rq3-lmdrive-lock-requirements.txt`
+
+Full setup guide:
+
+- `environment/README.md`
+
+Create envs:
+
+```bash
+conda env create -f environment/intuitiontester-rq1-quality.yml
+conda env create -f environment/intuitiontester-rq1-3d-eval.yml
+conda env create -f environment/intuitiontester-rq2-orchestrator.yml
+conda env create -f environment/intuitiontester-rq3-interfuser.yml
+conda env create -f environment/intuitiontester-rq3-lmdrive.yml
+```
+
+For RQ1 (KITTI), use separate Python envs:
+
+- `intuitiontester-rq1-quality` for NIQE/BRISQUE/PSNR/SSIM/LPIPS quality metrics (`--quality-python`)
+- `intuitiontester-rq1-3d-eval` for VirConv + DID-M3D (`--virconv-python` and script runtime python)
+
+For RQ2 (Udacity CH2), use `intuitiontester-rq2-orchestrator` for local orchestration scripts, while the core evaluation still runs in Docker.
+
+Example:
+
+```bash
+CONDA_BASE=$(conda info --base)
+bash scripts/run/run_rq1_kitti.sh --profile paper-kitti-main -- \
+  --kitti-root ./data/kitti \
+  --virconv-root ./data/virconv \
+  --did-m3d-root ./experiments/kitti/support_files/did_m3d \
+  --quality-python "${CONDA_BASE}/envs/intuitiontester-rq1-quality/bin/python" \
+  --virconv-python "${CONDA_BASE}/envs/intuitiontester-rq1-3d-eval/bin/python"
+```
 
 ## Integration Workflow
 
-1. Pull all three remote sources into `IntuitionTester_sources`.
-2. Export provenance metadata from each host (`git rev`, env, hardware).
+1. Pull all source mirrors into `IntuitionTester_sources`.
+2. Export provenance metadata from each run environment (`git rev`, env, hardware).
 3. Map files to RQ1/RQ2/RQ3 folders in this repo.
 4. Standardize configs and run entries under `configs/` and `scripts/run/`.
 5. Merge raw outputs into unified metrics under `results/processed/`.
 6. Regenerate paper tables/figures under `results/tables/` and `results/figures/`.
 7. Fill `docs/EXPERIMENT_MATRIX.md` to map each table/figure back to scripts and data.
+
+## Data and Release Strategy
+
+- Use GitHub for code/config/docs and lightweight processed artifacts.
+- Use Zenodo for large reproducibility bundles.
+- Keep external raw datasets out of the repository unless redistribution is explicitly allowed.
+- See:
+  - `docs/DATA_MANIFEST.md`
+  - `docs/ZENODO_RELEASE_PLAN.md`
+  - `docs/KITTI_UDACITY_SCRIPT_MAP.md`
 
 ## Quick Start (Planned)
 
@@ -152,22 +251,44 @@ bash scripts/run/run_rq2_udacity.sh --profile paper-ch2-main -- --ch2-root ./dat
 
 # RQ3 summarize integrated JSON artifacts
 bash scripts/run/run_rq3_carla.sh --profile paper-carla-summary
+
+# RQ3 LMDrive native single run
+bash scripts/run/run_rq3_carla.sh --profile paper-carla-lmdrive-native -- langauto_tiny none
+
+# RQ3 LMDrive native sweep (parallel)
+bash scripts/run/run_rq3_carla.sh --profile paper-carla-lmdrive-sweep
+
+# RQ3 paper-table extraction (original extractor, aligned to current layout)
+python experiments/carla/rq3_scripts_original/extract_rq3_tables.py --section native --out-dir results/raw/rq3
 ```
 
-Profile aliases (for backward compatibility):
+Profile aliases (public entry names):
 
-- `paper-kitti-main` = `upstream-host172-cpu`
-- `paper-kitti-gpu` = `upstream-host172-gpu`
-- `paper-ch2-main` = `upstream-host172`
-- `paper-ch2-variant` = `upstream-host114`
-- `paper-carla-native` = `upstream-host210-native`
-- `paper-carla-summary` = `upstream-host210-summary`
+- `paper-kitti-main`
+- `paper-kitti-gpu`
+- `paper-ch2-main`
+- `paper-ch2-variant`
+- `paper-carla-native`
+- `paper-carla-lmdrive-native`
+- `paper-carla-lmdrive-sweep`
+- `paper-carla-summary`
 
 Required data paths for rerun profiles:
 
 - RQ1 integrated profile: pass `--kitti-root`, and for default full-run also pass `--virconv-root` and `--did-m3d-root`.
 - RQ2 integrated profile: pass both `--ch2-root` and `--weights-root`, and prepare `input_combo` via `scripts/data/prepare_augmented_inputs.sh`.
 - If omitted, wrappers look for local placeholders under `data/` and fail fast with guidance.
+
+RQ3 integrated result layout:
+
+- InterFuser baseline + with-processor:
+  - `results/raw/rq3/interfuser/interfuser_town05_result.json`
+  - `results/raw/rq3/interfuser/interfuser_42routes_result.json`
+  - `results/raw/rq3/interfuser/with_processor/*.json`
+- InterFuser native (for `paper-carla-summary`):
+  - `results/raw/rq3/native_json/*.json`
+- LMDrive native sweep:
+  - `results/raw/rq3/lmdrive/native_sweep/fullcover_native_20260320/*.json`
 
 ## Platform Notes
 
@@ -178,6 +299,6 @@ Required data paths for rerun profiles:
 
 - Large datasets and checkpoints should not be committed. Provide download and checksum instructions in subfolder README files.
 - Keep `results/raw` append-only once experiments are completed.
-- Every run should write a `meta.json` with commit hash, config hash, seed, host, and timestamp.
-- Upstream scripts under `experiments/*/upstream_hosts` are included intentionally for full public release and provenance.
+- Every run should write a `meta.json` with commit hash, config hash, seed, runtime environment, and timestamp.
+- This repository is self-contained for code execution; no extra code mirror is required.
 - A richer release-ready sample artifact set is provided under `results/processed/reference_bundle/`.

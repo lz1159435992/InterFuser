@@ -17,6 +17,8 @@ venv/
 # Data and checkpoints (keep via README only)
 datasets/
 checkpoints/
+data/raw/
+data/**/raw/
 
 # Results policy:
 # - keep curated outputs in results/processed, results/tables, results/figures
@@ -34,3 +36,6 @@ paper/tex/*.out
 paper/tex/*.synctex.gz
 paper/tex/*.toc
 paper/tex/*.pdf
+
+# Release packaging outputs
+release_artifacts/

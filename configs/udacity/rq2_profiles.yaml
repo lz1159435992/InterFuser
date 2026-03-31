@@ -3,8 +3,8 @@ profiles:
     entry: experiments/udacity/rq2_scripts_original/calculate_rq2_violations.py
     notes: lightweight violation summary from existing prediction artifacts
 
-  upstream_host172:
-    entry: experiments/udacity/upstream_hosts/host172/tools/run_combo_eval.py
+  paper_ch2_main:
+    entry: experiments/udacity/pipeline/udacity/tools/run_combo_eval.py
     args_template:
       pipelines: all
       segments: 1,2,3,4,5,6
@@ -12,8 +12,8 @@ profiles:
       ch2_root: /path/to/CH2
       weights_root: /path/to/community-models
 
-  upstream_host114:
-    entry: experiments/udacity/upstream_hosts/host114/tools/run_combo_eval.py
+  paper_ch2_variant:
+    entry: experiments/udacity/pipeline/udacity/tools/run_combo_eval.py
     args_template:
       pipelines: all
       segments: 1,2,3,4,5,6

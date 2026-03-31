@@ -1,0 +1,13 @@
+numpy==1.23.5
+scipy==1.10.1
+pillow==10.2.0
+opencv-python==4.9.0.80
+scikit-image==0.21.0
+pyyaml==6.0.3
+easydict==1.13
+numba==0.58.1
+pandas==2.0.3
+tqdm==4.67.1
+tensorboardX==2.6.2.2
+torch==2.0.1
+torchvision==0.15.2
